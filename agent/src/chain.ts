@@ -6,6 +6,7 @@ export const VAULT_ABI = [
   { type: "function", name: "dailyLimit", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "spentToday", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "allowedTarget", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
   {
     type: "function",
     name: "execute",
@@ -52,4 +53,13 @@ export async function submitExecute(d: Extract<Decision, { kind: "execute" }>): 
     throw new Error(`execute tx reverted on-chain: ${hash}`);
   }
   return hash;
+}
+
+export async function isTargetAllowed(target: `0x${string}`): Promise<boolean> {
+  return (await publicClient.readContract({
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: "allowedTarget",
+    args: [target],
+  })) as boolean;
 }

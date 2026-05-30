@@ -39,4 +39,12 @@ describe("checkPolicy", () => {
   it("always allows hold", () => {
     expect(checkPolicy({ kind: "hold", rationale: "wait" }, state).ok).toBe(true);
   });
+  it("allows a spend exactly at the per-tx limit", () => {
+    // value == spendLimitPerTx (100) is allowed; reset spentToday so daily doesn't interfere
+    expect(checkPolicy(exec(100n), { ...state, spentToday: 0n }).ok).toBe(true);
+  });
+  it("allows a spend that hits the daily limit exactly", () => {
+    // spentToday 200 + 50 = 250 == dailyLimit -> allowed (boundary is inclusive, matching the contract)
+    expect(checkPolicy(exec(50n), state).ok).toBe(true);
+  });
 });
