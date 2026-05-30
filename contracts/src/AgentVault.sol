@@ -26,9 +26,12 @@ contract AgentVault {
     event Deposited(address indexed from, uint256 amount);
     event TargetAllowed(address indexed target, bool allowed);
     event PausedSet(bool paused);
+    event AgentSet(address indexed agent);
+    event LimitsSet(uint256 spendLimitPerTx, uint256 dailyLimit);
 
     error NotOwner();
     error NotAgent();
+    error ZeroAddress();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -40,6 +43,7 @@ contract AgentVault {
     }
 
     constructor(address _agent, uint256 _spendLimitPerTx, uint256 _dailyLimit) {
+        if (_agent == address(0)) revert ZeroAddress();
         owner = msg.sender;
         agent = _agent;
         spendLimitPerTx = _spendLimitPerTx;
@@ -59,6 +63,18 @@ contract AgentVault {
     function setPaused(bool p) external onlyOwner {
         paused = p;
         emit PausedSet(p);
+    }
+
+    function setAgent(address _agent) external onlyOwner {
+        if (_agent == address(0)) revert ZeroAddress();
+        agent = _agent;
+        emit AgentSet(_agent);
+    }
+
+    function setLimits(uint256 _spendLimitPerTx, uint256 _dailyLimit) external onlyOwner {
+        spendLimitPerTx = _spendLimitPerTx;
+        dailyLimit = _dailyLimit;
+        emit LimitsSet(_spendLimitPerTx, _dailyLimit);
     }
 
     function withdraw(uint256 amount) external onlyOwner {

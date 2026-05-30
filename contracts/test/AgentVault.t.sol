@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {AgentVault} from "../src/AgentVault.sol";
 import {MockTarget} from "./mocks/MockTarget.sol";
+import {MockReentrant} from "./mocks/MockReentrant.sol";
 
 contract AgentVaultTest is Test {
     AgentVault vault;
@@ -88,4 +89,57 @@ contract AgentVaultTest is Test {
         vm.prank(agent);
         vault.execute(address(target), 0.1 ether, _ping(7), "rebalance");
     }
+
+    function test_constructorRejectsZeroAgent() public {
+        vm.expectRevert(AgentVault.ZeroAddress.selector);
+        new AgentVault(address(0), PER_TX, DAILY);
+    }
+
+    function test_withdraw() public {
+        uint256 vaultBefore = address(vault).balance;
+        uint256 ownerBefore = address(this).balance;
+        vault.withdraw(1 ether);
+        assertEq(address(vault).balance, vaultBefore - 1 ether);
+        assertEq(address(this).balance, ownerBefore + 1 ether);
+    }
+
+    function test_revertsWhenCallFails() public {
+        target.setShouldRevert(true);
+        vm.prank(agent);
+        vm.expectRevert(bytes("call failed"));
+        vault.execute(address(target), 0, _ping(1), "will fail");
+    }
+
+    function test_setAgentRotatesAgent() public {
+        address newAgent = address(0xBEEF);
+        vault.setAgent(newAgent);
+        assertEq(vault.agent(), newAgent);
+        // the old agent can no longer execute
+        vm.prank(agent);
+        vm.expectRevert(AgentVault.NotAgent.selector);
+        vault.execute(address(target), 0, _ping(1), "old agent");
+    }
+
+    function test_setAgentRejectsZero() public {
+        vm.expectRevert(AgentVault.ZeroAddress.selector);
+        vault.setAgent(address(0));
+    }
+
+    function test_setLimits() public {
+        vault.setLimits(2 ether, 5 ether);
+        assertEq(vault.spendLimitPerTx(), 2 ether);
+        assertEq(vault.dailyLimit(), 5 ether);
+    }
+
+    function test_reentrancyBlocked() public {
+        MockReentrant evil = new MockReentrant(vault);
+        vault.setAllowedTarget(address(evil), true);
+        vm.prank(agent);
+        // evil.attack re-enters execute as msg.sender=vault (not agent) -> NotAgent;
+        // that inner revert makes the outer low-level call fail -> "call failed".
+        vm.expectRevert(bytes("call failed"));
+        vault.execute(address(evil), 0, abi.encodeWithSignature("attack(uint256)", 1), "trigger");
+    }
+
+    receive() external payable {}
 }
