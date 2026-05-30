@@ -1,0 +1,4 @@
+# Codex plugin defaults for this project.
+# Higher reasoning effort for security-sensitive contract reviews.
+model = "gpt-5.4-codex"
+model_reasoning_effort = "high"
