@@ -1,0 +1,14 @@
+# secrets
+.env
+.env.local
+*.key
+# node
+node_modules/
+.next/
+dist/
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+# misc
+.DS_Store
