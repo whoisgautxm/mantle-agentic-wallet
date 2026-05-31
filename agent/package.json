@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "start": "tsx src/agent.ts",
-    "keeper": "tsx src/keeper.ts"
+    "keeper": "tsx src/keeper.ts",
+    "baseline": "tsx src/baseline.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
