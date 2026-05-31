@@ -3,10 +3,15 @@ import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./cha
 import { decide } from "./brain.js";
 import { checkPolicy } from "./policy.js";
 import { chain, aiVaultAddress, dexAddress } from "./config.js";
+import { portfolioValueWei, roiBps } from "./pnl.js";
+import { sendAlert } from "./telegram.js";
 
 const client = new Anthropic();
 const PRICE_HISTORY_MAX = 12;
+const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
+let peakValueWei = 0n;
+let breakerTripped = false;
 
 async function tick(context: string): Promise<void> {
   const price = await readPrice();
@@ -27,9 +32,27 @@ async function tick(context: string): Promise<void> {
     return;
   }
 
+  const portfolioValue = portfolioValueWei(state.balanceWei, state.tokenBalanceWei, state.priceWei);
+  if (portfolioValue > peakValueWei) peakValueWei = portfolioValue;
+  const drawdownBps = roiBps(portfolioValue, peakValueWei);
+  if (drawdownBps <= MAX_DRAWDOWN_BPS) {
+    if (!breakerTripped) {
+      breakerTripped = true;
+      console.warn("[breaker] drawdown limit hit; soft-pausing AI trading", {
+        portfolioValue: portfolioValue.toString(),
+        peakValue: peakValueWei.toString(),
+        drawdownBps: drawdownBps.toString(),
+      });
+    }
+    return;
+  }
+
   const decision = await decide(client, state, priceHistory, dexAddress, context);
   console.log("[decision]", decision.kind, "-", decision.rationale);
-  if (decision.kind === "hold") return;
+  if (decision.kind === "hold") {
+    await sendAlert(decision);
+    return;
+  }
 
   const policy = checkPolicy(decision, state);
   if (!policy.ok) {
@@ -45,6 +68,7 @@ async function tick(context: string): Promise<void> {
   const hash = await submitExecute(aiVaultAddress, decision);
   const base = chain.blockExplorers?.default.url ?? "";
   console.log("[executed]", `${base}/tx/${hash}`);
+  await sendAlert(decision, hash);
 }
 
 async function main() {

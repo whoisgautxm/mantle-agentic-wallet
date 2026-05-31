@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, Claude via Anthropic SDK, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-16%2F16-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-24%2F24-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -87,6 +87,8 @@ The key design choice: the model proposes high-level intent only. TypeScript enc
 | Owner withdrawal | `withdraw(amount)` | Human owner can recover funds |
 | Calldata generation in code | `dex.ts` | Prevents LLM malformed-calldata or arbitrary-call footguns |
 | Receipt status check | `waitForTransactionReceipt` | Reverted txs are not reported as successful |
+| Drawdown soft breaker | `agent/src/agent.ts` | AI stops trading if portfolio value drops 15% from observed peak |
+| Optional Telegram alerts | `agent/src/telegram.ts` | Sends hold/trade notifications when env vars are configured |
 
 `AgentVault` is the source of truth. The TypeScript policy is just a preflight to avoid doomed transactions.
 
@@ -169,7 +171,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 16 passing |
+| Agent | `cd agent && npm test` | 24 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -187,6 +189,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 AGENT_INTERVAL_MS=120000
 BASELINE_INTERVAL_MS=60000
 KEEPER_INTERVAL_MS=45000
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 ```
 
 Use testnet keys only. `.env` is gitignored.
@@ -258,6 +262,7 @@ Open `http://localhost:3000`. The dashboard auto-refreshes every 15 seconds.
 - **Directly matches the track** - autonomous AI behavior, on-chain decisions, and Human-vs-AI comparison.
 - **Demo is observable** - judges can watch decisions, trades, and price/PnL move live.
 - **Safety is contract-enforced** - model mistakes cannot bypass allowlist, limits, pause, or owner recovery.
+- **Safety is observable** - drawdown soft-pauses and optional Telegram alerts make the live agent easier to monitor.
 - **No raw LLM calldata** - the agent chooses intent; code builds calldata.
 - **Composable path forward** - replace `MockDEX` with a real Mantle DEX by changing the target and calldata encoder while keeping the vault and dashboard model.
 
@@ -266,7 +271,6 @@ Open `http://localhost:3000`. The dashboard auto-refreshes every 15 seconds.
 ## Roadmap
 
 - Real Mantle DEX integration with slippage bounds
-- Drawdown circuit breaker and Telegram alerts
 - Multi-agent leaderboard from event logs
 - ERC-4337/session-key account abstraction
 - Mainnet hardening with multisig, timelock, monitoring, and audit
@@ -276,4 +280,3 @@ Open `http://localhost:3000`. The dashboard auto-refreshes every 15 seconds.
 ## License
 
 MIT - see [LICENSE](LICENSE).
-
