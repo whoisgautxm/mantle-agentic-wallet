@@ -1,12 +1,24 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
-import { decide } from "./brain.js";
+import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { checkPolicy } from "./policy.js";
 import { chain, aiVaultAddress, dexAddress } from "./config.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
 import { sendAlert } from "./telegram.js";
 
-const client = new Anthropic();
+function createReasoningClient(): ReasoningClient {
+  const provider = (process.env.AI_PROVIDER ?? "openai").toLowerCase() as ReasoningProvider;
+  if (provider === "anthropic") {
+    return { provider, anthropic: new Anthropic() };
+  }
+  if (provider === "openai") {
+    return { provider, openai: new OpenAI() };
+  }
+  throw new Error(`unsupported AI_PROVIDER: ${provider}`);
+}
+
+const client = createReasoningClient();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
@@ -77,7 +89,7 @@ async function main() {
     process.env.AGENT_CONTEXT ??
     "Trade conservatively. Prefer holding unless recent price action gives a clear low-risk edge.";
 
-  console.log("[agent] AI trader starting on", chain.name);
+  console.log("[agent] AI trader starting on", chain.name, "using", client.provider);
 
   let running = false;
   const loop = async () => {

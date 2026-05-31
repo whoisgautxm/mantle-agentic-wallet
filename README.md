@@ -4,7 +4,7 @@
 
 **Submission for:** [The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mantleturingtesthackathon2026) - Agentic Wallets & Economy track  
 **Network:** Mantle Sepolia (`chainId` `5003`)  
-**Stack:** Solidity + Foundry, TypeScript + viem, Claude via Anthropic SDK, Next.js
+**Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
 ![Agent](https://img.shields.io/badge/agent%20tests-24%2F24-brightgreen)
@@ -46,7 +46,7 @@ The key design choice: the model proposes high-level intent only. TypeScript enc
 ```text
                     AI TRADER                            HUMAN BASELINE
               agent/src/agent.ts                        agent/src/baseline.ts
-          Claude -> buy/sell/hold intent              deterministic DCA buy
+          OpenAI/Claude -> buy/sell/hold              deterministic DCA buy
                     |                                         |
                     v                                         v
              AgentVault (AI)                         AgentVault (Baseline)
@@ -66,7 +66,7 @@ The key design choice: the model proposes high-level intent only. TypeScript enc
 
 1. **Keeper simulates a market** - `npm run keeper` calls owner-only `MockDEX.setPrice`.
 2. **AI observes** - reads vault MNT balance, token balance, price, limits, pause state, and price history.
-3. **AI decides** - Claude must call `propose_action` with `buy`, `sell`, or `hold`.
+3. **AI decides** - the configured provider must call `propose_action` with `buy`, `sell`, or `hold`.
 4. **Code encodes** - `agent/src/dex.ts` builds `buy()` or `sell(uint256)` calldata; the LLM never writes raw calldata.
 5. **Policy guards** - client-side checks mirror per-tx, daily-window, pause, balance, allowlist, and sell-token limits.
 6. **Vault executes** - `AgentVault.execute(...)` enforces hard on-chain limits and emits `AgentDecision`.
@@ -133,10 +133,10 @@ Together, these events form a replayable benchmark: what the agent saw, what it 
 │   └── script/Deploy.s.sol       # deploys MockDEX + AI/baseline vaults
 ├── agent/
 │   └── src/
-│       ├── agent.ts              # Claude-driven AI trader
+│       ├── agent.ts              # provider-driven AI trader
 │       ├── baseline.ts           # deterministic DCA baseline
 │       ├── keeper.ts             # owner-key price simulator
-│       ├── brain.ts              # tool-use parser and Claude call
+│       ├── brain.ts              # tool-use parser and provider calls
 │       ├── dex.ts                # DEX ABI and calldata encoders
 │       ├── chain.ts              # viem reads/writes
 │       └── policy.ts             # client-side preflight guard
@@ -155,7 +155,7 @@ Together, these events form a replayable benchmark: what the agent saw, what it 
 
 - Foundry (`forge`)
 - Node.js 22+
-- Anthropic API key
+- OpenAI API key, or an Anthropic API key if `AI_PROVIDER=anthropic`
 - Funded Mantle Sepolia keys for deployer/owner, AI agent, and baseline agent
 
 ### Test Everything
@@ -185,7 +185,12 @@ DEPLOYER_PRIVATE_KEY=0x...
 AGENT_PRIVATE_KEY=0x...
 BASELINE_PRIVATE_KEY=0x...
 OWNER_PRIVATE_KEY=0x...
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-proj-...
+OPENAI_MODEL=gpt-5.2
+# Optional if AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-6
 AGENT_INTERVAL_MS=120000
 BASELINE_INTERVAL_MS=60000
 KEEPER_INTERVAL_MS=45000
