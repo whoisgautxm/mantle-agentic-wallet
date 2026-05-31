@@ -1,265 +1,279 @@
-# 🤖 Autonomous Agent Wallet on Mantle
+# Autonomous Agent Wallet on Mantle
 
-> **An AI agent that holds its own funds and transacts on-chain — autonomously, under hard safety limits, with every single decision (and its reasoning) recorded permanently on Mantle.**
+> An AI-controlled smart-contract wallet that trades on-chain under hard safety limits, compares itself against a deterministic human baseline, and records every decision permanently on Mantle.
 
-**Submission for:** [The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mantleturingtesthackathon2026) — **Agentic Wallets & Economy** track
-**Network:** Mantle Sepolia (chainId `5003`)
-**Stack:** Solidity (Foundry) · TypeScript (viem) · Claude (Anthropic SDK) · Next.js
+**Submission for:** [The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mantleturingtesthackathon2026) - Agentic Wallets & Economy track  
+**Network:** Mantle Sepolia (`chainId` `5003`)  
+**Stack:** Solidity + Foundry, TypeScript + viem, Claude via Anthropic SDK, Next.js
 
-<!-- Badges -->
-![Contracts](https://img.shields.io/badge/forge%20tests-15%2F15-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-11%2F11-brightgreen)
+![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-16%2F16-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
-## 🔗 Live Links
+## Live Links
 
-> _Fill these in after deployment (see [Deploying](#-deploying-to-mantle))._
+Fill these in after deployment:
 
-| | |
+| Link | URL |
 |---|---|
-| **Live dashboard** | `https://<your-vercel-app>.vercel.app` |
-| **AgentVault on explorer** | `https://explorer.sepolia.mantle.xyz/address/<vault-address>` |
-| **Demo agent decision (on-chain)** | `https://explorer.sepolia.mantle.xyz/tx/<tx-hash>` |
-| **Demo video** | `https://<youtube-or-loom-link>` |
-| **GitHub** | https://github.com/whoisgautxm/mantle-agentic-wallet |
+| Live dashboard | `https://<your-vercel-app>.vercel.app` |
+| MockDEX on explorer | `https://explorer.sepolia.mantle.xyz/address/<mock-dex>` |
+| AI vault on explorer | `https://explorer.sepolia.mantle.xyz/address/<ai-vault>` |
+| Baseline vault on explorer | `https://explorer.sepolia.mantle.xyz/address/<baseline-vault>` |
+| Demo decision tx | `https://explorer.sepolia.mantle.xyz/tx/<tx-hash>` |
+| GitHub | https://github.com/whoisgautxm/mantle-agentic-wallet |
 
 ---
 
-## The Idea in One Sentence
+## The Idea
 
-The hackathon asks: *can an AI agent act autonomously on-chain, and can we benchmark its behavior?* Our answer is a **smart-contract wallet that an AI agent controls** — it observes, reasons with an LLM, and submits its own Mantle transactions — where the contract itself **enforces hard spending limits** and **emits an on-chain log of every decision plus the agent's natural-language rationale.** Autonomy with accountability, written to the chain.
+The hackathon asks whether AI agents can act autonomously on-chain and whether their behavior can be benchmarked. This project answers with a guarded wallet system:
 
-## Why It Fits "The Turing Test" Theme
+- An AI agent controls an `AgentVault` and proposes `buy`, `sell`, or `hold`.
+- A deterministic DCA runner controls a second `AgentVault` as the "human baseline."
+- Both vaults trade against the same self-contained `MockDEX`.
+- Every vault action emits `AgentDecision`, and every market/trade event emits from `MockDEX`.
+- The dashboard reconstructs the Human-vs-AI comparison from chain logs, not a trusted off-chain database.
 
-The hackathon is framed as an **on-chain benchmark for agentic AI interacting with DeFi rails** — a "Human vs AI" experiment where Mantle records agent decisions and outcomes on-chain. This project is a direct, literal implementation of that premise:
-
-- **Every agent action is a benchmark data point.** The `AgentVault.AgentDecision` event captures the nonce, target, value, calldata, *and the agent's reasoning string* for each move — a permanent, queryable record of how the agent behaved.
-- **The agent is genuinely autonomous.** No human signs the transactions. A dedicated agent key (a "session key") submits them; the human owner only sets guardrails and can pause.
-- **It's safe enough to actually run.** The contract — not the model — is the source of truth for what the agent is allowed to do. An LLM hallucination cannot drain the vault.
+The key design choice: the model proposes high-level intent only. TypeScript encodes calldata, the client policy preflights the move, and the Solidity vault remains the source of truth.
 
 ---
 
-## How It Works
+## Architecture
 
-```
-                    ┌──────────────────────────────────────────────┐
-                    │                  AGENT RUNTIME (TypeScript)     │
-                    │                                                 │
-   ┌────────────┐   │  1. observe ──► readVaultState()  (viem reads)  │
-   │   Claude    │◄──┤  2. decide  ──► propose_action tool (pay/hold)  │
-   │ (Sonnet 4.6)│──►│       LLM returns a HIGH-LEVEL intent only      │
-   └────────────┘   │  3. encode  ──► agent builds calldata + wei      │
-                    │       (encodeFunctionData / parseEther in code)  │
-                    │  4. guard   ──► checkPolicy() mirrors the contract│
-                    │             ──► isTargetAllowed() on-chain check  │
-                    │  5. submit  ──► execute(...) via the agent key    │
-                    └───────────────────────┬─────────────────────────┘
-                                             │  signs & sends tx
-                                             ▼
-            ┌─────────────────────────────────────────────────────────┐
-            │            AgentVault.sol  (Mantle — source of truth)      │
-            │                                                            │
-            │  execute(target, value, data, rationale) onlyAgent:        │
-            │    require !paused                                         │
-            │    require allowedTarget[target]                          │
-            │    require value <= spendLimitPerTx                       │
-            │    require spentToday + value <= dailyLimit  (rolling 24h) │
-            │    emit AgentDecision(nonce, target, value, data, rationale)│ ◄── the benchmark log
-            │    target.call{value}(data)                               │
-            └───────────────────────┬───────────────────────────────────┘
-                                     │  emits events
-                                     ▼
-            ┌─────────────────────────────────────────────────────────┐
-            │     Next.js Dashboard  —  reads AgentDecision logs         │
-            │     "Watch the agent think and act, live, on-chain."       │
-            └─────────────────────────────────────────────────────────┘
+```text
+                    AI TRADER                            HUMAN BASELINE
+              agent/src/agent.ts                        agent/src/baseline.ts
+          Claude -> buy/sell/hold intent              deterministic DCA buy
+                    |                                         |
+                    v                                         v
+             AgentVault (AI)                         AgentVault (Baseline)
+          onlyAgent + limits + pause              onlyAgent + limits + pause
+                    \                                         /
+                     \                                       /
+                      v                                     v
+                    MockDEX - internal token ledger + owner-set price
+                    emits PriceSet, Bought, Sold
+                                     |
+                                     v
+                     Next.js dashboard reconstructs price, PnL,
+                     trades, and decision replay from on-chain logs
 ```
 
-### The flow, step by step
-1. **Observe** — the agent reads live vault state from Mantle (balance, per-tx limit, daily limit, spent-today, paused).
-2. **Decide** — it sends that state to Claude, which must call the `propose_action` tool, returning a **high-level intent**: `pay` (amount + memo) or `hold`, with a rationale.
-3. **Encode in code, not in the model** — the agent itself computes the wei amount (`parseEther`) and ABI-encodes the calldata (`encodeFunctionData`). The LLM never produces raw calldata, so a malformed-hex hallucination is impossible.
-4. **Guard** — a client-side policy check mirrors the contract's limits exactly, and an on-chain `allowedTarget` check ensures we never waste a transaction on a target the vault would reject.
-5. **Submit** — the agent key sends `execute(...)`; the wallet client waits for the receipt and **throws if the transaction reverted** (so a failed action is never reported as success).
+### Runtime Flow
+
+1. **Keeper simulates a market** - `npm run keeper` calls owner-only `MockDEX.setPrice`.
+2. **AI observes** - reads vault MNT balance, token balance, price, limits, pause state, and price history.
+3. **AI decides** - Claude must call `propose_action` with `buy`, `sell`, or `hold`.
+4. **Code encodes** - `agent/src/dex.ts` builds `buy()` or `sell(uint256)` calldata; the LLM never writes raw calldata.
+5. **Policy guards** - client-side checks mirror per-tx, daily-window, pause, balance, allowlist, and sell-token limits.
+6. **Vault executes** - `AgentVault.execute(...)` enforces hard on-chain limits and emits `AgentDecision`.
+7. **Dashboard replays** - Next.js reads `AgentDecision`, `PriceSet`, `Bought`, and `Sold` logs.
 
 ---
 
-## The Safety Model (the differentiator)
-
-A wallet you hand to an autonomous AI is only as trustworthy as its guardrails. Ours are enforced **on-chain**, so they hold even if the agent code or the LLM misbehaves:
+## Safety Model
 
 | Guardrail | Enforced by | Effect |
 |---|---|---|
-| **Per-transaction limit** | `require(value <= spendLimitPerTx)` | The agent can never move more than X per action |
-| **Rolling 24h daily limit** | `require(spentToday + value <= dailyLimit)` | Caps total daily outflow; auto-resets after 24h |
-| **Target allowlist** | `require(allowedTarget[target])` | The agent can only interact with owner-approved contracts |
-| **Kill switch** | `setPaused(true)` (owner-only) | Instantly halts all agent activity |
-| **Agent-key rotation** | `setAgent(newKey)` (owner-only) | If the session key is compromised, rotate without redeploying |
-| **Owner-only fund recovery** | `withdraw(amount)` | The human can always reclaim funds |
+| Agent-only execution | `onlyAgent` | Human owner delegates execution to scoped agent keys |
+| Target allowlist | `allowedTarget[target]` | Agent can only call approved venues |
+| Per-transaction limit | `value <= spendLimitPerTx` | Caps each buy/action |
+| Rolling 24h daily limit | `spentToday + value <= dailyLimit` | Caps outflow and resets after 24h |
+| Pause switch | `setPaused(true)` | Owner can immediately stop execution |
+| Agent rotation | `setAgent(newAgent)` | Owner can rotate compromised session keys |
+| Owner withdrawal | `withdraw(amount)` | Human owner can recover funds |
+| Calldata generation in code | `dex.ts` | Prevents LLM malformed-calldata or arbitrary-call footguns |
+| Receipt status check | `waitForTransactionReceipt` | Reverted txs are not reported as successful |
 
-Defense-in-depth: the **contract is the source of truth**, the agent runs a **client-side mirror** of the same checks as a pre-flight, and **checks-effects-interactions** ordering plus the `onlyAgent` guard make reentrancy a non-issue (proven by a dedicated reentrancy test).
+`AgentVault` is the source of truth. The TypeScript policy is just a preflight to avoid doomed transactions.
 
 ---
 
-## The On-Chain Decision Log
+## On-Chain Benchmark Events
 
-Every action emits:
+`AgentVault` records reasoning:
 
 ```solidity
 event AgentDecision(
     uint256 indexed nonce,
     address indexed target,
     uint256 value,
-    bytes   data,
-    string  rationale   // the agent's own words: "why I did this"
+    bytes data,
+    string rationale
 );
 ```
 
-This is the heart of the "benchmark" idea — anyone can replay the full history of the agent's behavior, reasoning included, straight from Mantle. The dashboard does exactly this, turning the chain into a live feed of the agent's mind.
+`MockDEX` records the market and trades:
 
----
+```solidity
+event PriceSet(uint256 price);
+event Bought(address indexed who, uint256 mntIn, uint256 tokensOut, uint256 price);
+event Sold(address indexed who, uint256 tokensIn, uint256 mntOut, uint256 price);
+```
 
-## Tech Stack
-
-- **Smart contracts:** Solidity `^0.8.24`, [Foundry](https://book.getfoundry.sh/) (forge / cast)
-- **Agent runtime:** TypeScript, Node 22, [viem](https://viem.sh) `2.x`, [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk) `0.40.1` (Claude Sonnet 4.6 for the loop), [vitest](https://vitest.dev)
-- **Dashboard:** Next.js 15 (App Router), viem for log reads, deployable to Vercel
-- **Chain:** Mantle Sepolia testnet (`5003`)
+Together, these events form a replayable benchmark: what the agent saw, what it did, why it did it, and how it compared against a baseline strategy.
 
 ---
 
 ## Repository Structure
 
-```
+```text
 .
-├── contracts/                 # Foundry project
-│   ├── src/
-│   │   ├── AgentVault.sol      # the agent-controlled vault (guards + decision log)
-│   │   └── PaymentSink.sol     # demo target the agent pays
-│   ├── test/AgentVault.t.sol   # 15 tests: access, limits, pause, reentrancy, rotation
-│   └── script/Deploy.s.sol     # deploys vault + sink, allowlists, seeds, logs block
-├── agent/                     # TypeScript agent runtime
+├── contracts/
+│   ├── src/AgentVault.sol        # guarded agent wallet
+│   ├── src/MockDEX.sol           # internal-ledger trading venue
+│   ├── src/PaymentSink.sol       # legacy simple-payment demo target
+│   ├── test/AgentVault.t.sol
+│   ├── test/MockDEX.t.sol
+│   └── script/Deploy.s.sol       # deploys MockDEX + AI/baseline vaults
+├── agent/
 │   └── src/
-│       ├── types.ts            # Decision / VaultState types
-│       ├── policy.ts           # client-side guard mirroring the contract  (TDD)
-│       ├── brain.ts            # Claude tool-use → encoded Decision         (TDD)
-│       ├── chain.ts            # viem reads/writes + on-chain allowlist check
-│       ├── config.ts           # env + chain + address wiring
-│       └── agent.ts            # the observe→decide→guard→execute loop
-├── web/                       # Next.js dashboard
-│   ├── lib/events.ts           # reads AgentDecision logs from deployBlock
-│   └── app/page.tsx            # live decision feed
-├── shared/addresses.json      # { chainId, agentVault, paymentSink, deployBlock }
-└── docs/superpowers/plans/    # the full implementation plan
+│       ├── agent.ts              # Claude-driven AI trader
+│       ├── baseline.ts           # deterministic DCA baseline
+│       ├── keeper.ts             # owner-key price simulator
+│       ├── brain.ts              # tool-use parser and Claude call
+│       ├── dex.ts                # DEX ABI and calldata encoders
+│       ├── chain.ts              # viem reads/writes
+│       └── policy.ts             # client-side preflight guard
+├── web/
+│   ├── app/page.tsx              # Human-vs-AI dashboard
+│   ├── app/components/           # chart + decision feeds
+│   └── lib/                      # event reads + PnL reconstruction
+└── shared/addresses.json         # deployed addresses and deploy block
 ```
 
 ---
 
-## Running It Locally
+## Running Locally
 
 ### Prerequisites
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`)
+
+- Foundry (`forge`)
 - Node.js 22+
-- An [Anthropic API key](https://console.anthropic.com/) (for the agent)
-- A funded Mantle Sepolia key (from the [Mantle faucet](https://faucet.sepolia.mantle.xyz/))
+- Anthropic API key
+- Funded Mantle Sepolia keys for deployer/owner, AI agent, and baseline agent
 
-### 1. Contracts
+### Test Everything
+
 ```bash
-cd contracts
-forge test -vvv          # 15 tests pass
+cd contracts && forge test
+cd ../agent && npm test && npx tsc --noEmit
+cd ../web && npm run build
 ```
 
-### 2. Agent
-```bash
-cd agent
-npm install
-npm test                 # 11 unit tests pass
-npx tsc --noEmit         # typecheck
-```
+Expected current results:
 
-### 3. Dashboard
-```bash
-cd web
-npm install
-npm run dev              # http://localhost:3000
-```
+| Suite | Command | Expected |
+|---|---|---|
+| Contracts | `cd contracts && forge test` | 26 passing |
+| Agent | `cd agent && npm test` | 16 passing |
+| Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
+| Dashboard build | `cd web && npm run build` | clean |
 
-### 4. Configure environment
+### Configure Environment
+
 Copy `.env.example` to `.env` and fill in:
+
 ```bash
 MANTLE_RPC_URL=https://rpc.sepolia.mantle.xyz
-DEPLOYER_PRIVATE_KEY=0x...     # owner; fund from the faucet
-AGENT_PRIVATE_KEY=0x...        # the agent's session key; fund with a little gas
+DEPLOYER_PRIVATE_KEY=0x...
+AGENT_PRIVATE_KEY=0x...
+BASELINE_PRIVATE_KEY=0x...
+OWNER_PRIVATE_KEY=0x...
 ANTHROPIC_API_KEY=sk-ant-...
 AGENT_INTERVAL_MS=120000
-AGENT_CONTEXT=Maintain the treasury. Only act if there is a clear, low-risk reason.
+BASELINE_INTERVAL_MS=60000
+KEEPER_INTERVAL_MS=45000
 ```
-> ⚠️ `.env` is gitignored — never commit real keys. Use **testnet** keys only.
+
+Use testnet keys only. `.env` is gitignored.
 
 ---
 
-## Deploying to Mantle
+## Deploying to Mantle Sepolia
+
+From the repo root:
 
 ```bash
-# from repo root, with .env filled and both keys funded
 set -a && source .env && set +a
 cd contracts
 forge script script/Deploy.s.sol:Deploy --rpc-url "$MANTLE_RPC_URL" --broadcast
 ```
 
-The script deploys `AgentVault` + `PaymentSink`, **allowlists the sink**, seeds the vault, and prints the deploy block. Copy the printed values into `shared/addresses.json`:
+The script deploys:
+
+- `MockDEX`
+- AI `AgentVault`
+- baseline `AgentVault`
+- allowlists `MockDEX` in both vaults
+- seeds DEX liquidity and vault balances
+
+Copy the printed values into `shared/addresses.json`:
 
 ```json
 {
   "chainId": 5003,
   "agentVault": "0x...",
-  "paymentSink": "0x...",
+  "paymentSink": "0x0000000000000000000000000000000000000000",
+  "mockDex": "0x...",
+  "aiVault": "0x...",
+  "baselineVault": "0x...",
   "deployBlock": 12345678
 }
 ```
 
-Then run the live agent:
+`agentVault` is kept for compatibility and should match `aiVault`.
+
+---
+
+## Running the Live Demo
+
+Use separate terminals from the repo root:
+
+```bash
+cd agent && set -a && source ../.env && set +a && npm run keeper
+```
+
 ```bash
 cd agent && set -a && source ../.env && set +a && npm start
 ```
-You'll see it observe state, get a decision from Claude, pass the guards, and submit a transaction — emitting an `AgentDecision` you can watch on the explorer and the dashboard.
+
+```bash
+cd agent && set -a && source ../.env && set +a && npm run baseline
+```
+
+```bash
+cd web && npm run dev
+```
+
+Open `http://localhost:3000`. The dashboard auto-refreshes every 15 seconds.
 
 ---
 
-## Testing
+## Why It Can Win
 
-| Suite | Command | Coverage |
-|---|---|---|
-| Contracts (15) | `cd contracts && forge test` | agent-only access, per-tx/daily limits, 24h reset, pause, allowlist, decision-event emission, **reentrancy**, zero-address guard, agent rotation, limit updates, withdraw, call-failure |
-| Agent (11) | `cd agent && npm test` | policy guard (incl. exact inclusive boundaries matching the contract), high-level-intent → encoded-Decision parsing |
-
-Money-handling code (`AgentVault.sol`, `policy.ts`) was built **test-first (TDD)**, and the security model was hardened in code review (reentrancy is proven blocked, the client guard mirrors the contract's exact inequality boundaries).
+- **Directly matches the track** - autonomous AI behavior, on-chain decisions, and Human-vs-AI comparison.
+- **Demo is observable** - judges can watch decisions, trades, and price/PnL move live.
+- **Safety is contract-enforced** - model mistakes cannot bypass allowlist, limits, pause, or owner recovery.
+- **No raw LLM calldata** - the agent chooses intent; code builds calldata.
+- **Composable path forward** - replace `MockDEX` with a real Mantle DEX by changing the target and calldata encoder while keeping the vault and dashboard model.
 
 ---
-
-## What Makes It Win
-
-- **Dead-on the track theme** — an autonomous agent that *actually transacts on-chain* on Mantle, with an on-chain benchmark log built in.
-- **Safety judges can trust** — limits, allowlist, pause, and key rotation enforced by the contract, not the prompt. Reentrancy-tested.
-- **A demo that sells itself** — the dashboard turns the agent's reasoning into a live, shareable feed (great for community vote + UI/UX).
-- **No LLM-calldata footguns** — the model proposes intent; the code does the encoding. Robust by construction.
-- **Composable by design** — any allowlisted contract is a valid agent target, so the same vault drops cleanly onto real DeFi rails (or the Byreal Skills CLI) post-hackathon.
 
 ## Roadmap
 
-- Multiple action types (swap, stake, LP) behind the same allowlist + decision-log model
-- Strategy modules the agent can choose between, each scored by realized on-chain outcomes
-- Multi-agent "Human vs AI" leaderboard reading directly from `AgentDecision` logs across vaults
-- Mainnet deployment with conservative limits and a timelocked owner
+- Real Mantle DEX integration with slippage bounds
+- Drawdown circuit breaker and Telegram alerts
+- Multi-agent leaderboard from event logs
+- ERC-4337/session-key account abstraction
+- Mainnet hardening with multisig, timelock, monitoring, and audit
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
----
-
-<sub>Built for the Mantle Turing Test Hackathon 2026. Contracts, agent, and dashboard are independently tested; the contract is the source of truth for all agent permissions.</sub>
