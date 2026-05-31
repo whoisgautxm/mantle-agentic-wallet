@@ -1,49 +1,66 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { encodeFunctionData, parseEther } from "viem";
+import { parseEther } from "viem";
+import { encodeBuy, encodeSell } from "./dex.js";
 import type { Decision, VaultState } from "./types.js";
-
-export const SINK_ABI = [
-  {
-    type: "function",
-    name: "pay",
-    stateMutability: "payable",
-    inputs: [{ name: "memo", type: "string" }],
-    outputs: [],
-  },
-] as const;
 
 export const PROPOSE_ACTION_TOOL = {
   name: "propose_action",
   description:
-    "Propose the agent's next action: pay the treasury sink, or hold. " +
-    "Respect the vault's per-tx and daily limits.",
+    "Propose the agent's next DEX trade: buy tokens with MNT, sell tokens for MNT, or hold. " +
+    "Respect MNT spend limits on buys and current token balance on sells.",
   input_schema: {
     type: "object" as const,
     properties: {
-      action: { type: "string", enum: ["pay", "hold"] },
-      amountMnt: { type: "string", description: 'amount of MNT to pay, decimal string e.g. "0.001" (pay only)' },
-      memo: { type: "string", description: "short memo recorded on-chain (pay only)" },
-      rationale: { type: "string", description: "why this action" },
+      action: { type: "string", enum: ["buy", "sell", "hold"] },
+      amountMnt: { type: "string", description: 'MNT to spend buying, e.g. "0.01" (buy only)' },
+      amountToken: { type: "string", description: 'tokens to sell, e.g. "0.5" (sell only)' },
+      rationale: { type: "string", description: "why this action, referencing the price trend" },
     },
     required: ["action", "rationale"],
   },
 };
 
-/// Pure mapping: tool input + the allowlisted sink address -> a contract-faithful
-/// Decision. Calldata and wei are computed HERE, not by the LLM. Throws on malformed pay.
-export function parseToolUse(input: any, sink: `0x${string}`): Decision {
+function parsePositiveEtherAmount(value: unknown, field: string): bigint {
+  if (typeof value !== "string" && typeof value !== "number") {
+    throw new Error(`${field} must be a decimal string`);
+  }
+  const raw = String(value).trim();
+  if (!/^(?:\d+|\d*\.\d+)$/.test(raw)) {
+    throw new Error(`${field} must be a positive decimal string`);
+  }
+  const parsed = parseEther(raw);
+  if (parsed <= 0n) throw new Error(`${field} must be positive`);
+  return parsed;
+}
+
+/// Pure mapping: tool input + DEX address -> contract-faithful Decision.
+/// Calldata and wei are computed here, never by the LLM.
+export function parseToolUse(input: any, dex: `0x${string}`): Decision {
   if (input?.action === "hold") {
     return { kind: "hold", rationale: String(input.rationale ?? "") };
   }
-  if (input?.action === "pay") {
-    if (input.amountMnt === undefined || input.memo === undefined) {
-      throw new Error("pay proposal missing amountMnt/memo");
-    }
+  if (input?.action === "buy") {
+    if (input.amountMnt === undefined) throw new Error("buy missing amountMnt");
+    const valueWei = parsePositiveEtherAmount(input.amountMnt, "amountMnt");
     return {
       kind: "execute",
-      target: sink,
-      valueWei: parseEther(String(input.amountMnt)),
-      calldata: encodeFunctionData({ abi: SINK_ABI, functionName: "pay", args: [String(input.memo)] }),
+      action: "buy",
+      target: dex,
+      valueWei,
+      calldata: encodeBuy(),
+      rationale: String(input.rationale ?? ""),
+    };
+  }
+  if (input?.action === "sell") {
+    if (input.amountToken === undefined) throw new Error("sell missing amountToken");
+    const amountTokenWei = parsePositiveEtherAmount(input.amountToken, "amountToken");
+    return {
+      kind: "execute",
+      action: "sell",
+      target: dex,
+      valueWei: 0n,
+      amountTokenWei,
+      calldata: encodeSell(amountTokenWei),
       rationale: String(input.rationale ?? ""),
     };
   }
@@ -54,15 +71,22 @@ export function parseToolUse(input: any, sink: `0x${string}`): Decision {
 export async function decide(
   client: Anthropic,
   state: VaultState,
+  priceHistory: bigint[],
+  dex: `0x${string}`,
   context: string,
-  sink: `0x${string}`,
 ): Promise<Decision> {
   const sys =
-    "You are an autonomous treasury agent for a smart-contract vault on Mantle. " +
-    "Each turn you may pay the treasury sink a small amount of MNT, or hold. " +
-    "Never propose an amount above the per-tx or remaining daily limit. " +
-    `Vault: balance=${state.balanceWei} wei, perTxLimit=${state.spendLimitPerTx} wei, ` +
+    "You are an autonomous trading agent for a smart-contract vault on Mantle. " +
+    "Each turn you may buy tokens with MNT, sell tokens for MNT, or hold. " +
+    "Buys are bounded by per-tx and remaining daily MNT limits; sells are bounded by token balance. " +
+    "Prefer small, explainable actions that improve total portfolio value. " +
+    `State: mntBalance=${state.balanceWei} wei, tokenBalance=${state.tokenBalanceWei} token-wei, ` +
+    `price=${state.priceWei} wei/token, perTxLimit=${state.spendLimitPerTx} wei, ` +
     `dailyLimit=${state.dailyLimit} wei, spentToday=${state.spentToday} wei, paused=${state.paused}.`;
+
+  const trend = priceHistory.length
+    ? `Recent prices, oldest to newest, wei/token: ${priceHistory.join(", ")}.`
+    : "No price history yet.";
 
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
@@ -70,12 +94,12 @@ export async function decide(
     system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
     tools: [PROPOSE_ACTION_TOOL],
     tool_choice: { type: "tool", name: "propose_action" },
-    messages: [{ role: "user", content: context }],
+    messages: [{ role: "user", content: `${context}\n\n${trend}` }],
   });
 
   const toolUse = msg.content.find((c) => c.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
     throw new Error("model did not call propose_action");
   }
-  return parseToolUse(toolUse.input, sink);
+  return parseToolUse(toolUse.input, dex);
 }

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "start": "tsx src/agent.ts"
+    "start": "tsx src/agent.ts",
+    "keeper": "tsx src/keeper.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

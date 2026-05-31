@@ -11,8 +11,10 @@ function env(name: string): string {
 }
 
 export const chain = mantleSepoliaTestnet;
-export const vaultAddress = addresses.agentVault as `0x${string}`;
-export const sinkAddress = addresses.paymentSink as `0x${string}`;
+export const aiVaultAddress = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
+export const baselineVaultAddress = (addresses as any).baselineVault as `0x${string}`;
+export const dexAddress = (addresses as any).mockDex as `0x${string}`;
+export const vaultAddress = aiVaultAddress;
 
 export const agentAccount = privateKeyToAccount(env("AGENT_PRIVATE_KEY") as `0x${string}`);
 
@@ -26,3 +28,21 @@ export const walletClient = createWalletClient({
   chain,
   transport: http(env("MANTLE_RPC_URL")),
 });
+
+export function getBaselineWalletClient() {
+  const baselineAccount = privateKeyToAccount(env("BASELINE_PRIVATE_KEY") as `0x${string}`);
+  return createWalletClient({
+    account: baselineAccount,
+    chain,
+    transport: http(env("MANTLE_RPC_URL")),
+  });
+}
+
+export function getOwnerWalletClient() {
+  const ownerAccount = privateKeyToAccount(env("OWNER_PRIVATE_KEY") as `0x${string}`);
+  return createWalletClient({
+    account: ownerAccount,
+    chain,
+    transport: http(env("MANTLE_RPC_URL")),
+  });
+}

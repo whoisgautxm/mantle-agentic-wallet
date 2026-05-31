@@ -6,6 +6,8 @@ export type Decision =
       valueWei: bigint;
       calldata: `0x${string}`;
       rationale: string;
+      action?: "pay" | "buy" | "sell";
+      amountTokenWei?: bigint;
     };
 
 export interface VaultState {
@@ -13,7 +15,10 @@ export interface VaultState {
   spendLimitPerTx: bigint;
   dailyLimit: bigint;
   spentToday: bigint;
+  windowStart: bigint;
   paused: boolean;
+  tokenBalanceWei: bigint;
+  priceWei: bigint;
 }
 
 export interface PolicyResult {

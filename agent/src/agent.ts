@@ -1,22 +1,34 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { readVaultState, submitExecute, isTargetAllowed } from "./chain.js";
+import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { decide } from "./brain.js";
 import { checkPolicy } from "./policy.js";
-import { chain, sinkAddress } from "./config.js";
+import { chain, aiVaultAddress, dexAddress } from "./config.js";
 
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+const client = new Anthropic();
+const PRICE_HISTORY_MAX = 12;
+const priceHistory: bigint[] = [];
 
 async function tick(context: string): Promise<void> {
-  const state = await readVaultState();
+  const price = await readPrice();
+  priceHistory.push(price);
+  if (priceHistory.length > PRICE_HISTORY_MAX) priceHistory.shift();
+
+  const state = await readVaultState(aiVaultAddress);
   console.log("[state]", {
-    balance: state.balanceWei.toString(),
+    mnt: state.balanceWei.toString(),
+    token: state.tokenBalanceWei.toString(),
+    price: state.priceWei.toString(),
     spentToday: state.spentToday.toString(),
     paused: state.paused,
   });
 
-  const decision = await decide(client, state, context, sinkAddress);
-  console.log("[decision]", decision.kind, "-", decision.rationale);
+  if (state.paused) {
+    console.log("[paused] skipping");
+    return;
+  }
 
+  const decision = await decide(client, state, priceHistory, dexAddress, context);
+  console.log("[decision]", decision.kind, "-", decision.rationale);
   if (decision.kind === "hold") return;
 
   const policy = checkPolicy(decision, state);
@@ -25,14 +37,12 @@ async function tick(context: string): Promise<void> {
     return;
   }
 
-  // Mirror the contract's allowlist: skip a target the vault would reject, so we
-  // never waste a tx on a "target not allowed" revert.
-  if (!(await isTargetAllowed(decision.target))) {
+  if (!(await isTargetAllowed(aiVaultAddress, decision.target))) {
     console.log("[guard] blocked: target not allowlisted on-chain:", decision.target);
     return;
   }
 
-  const hash = await submitExecute(decision);
+  const hash = await submitExecute(aiVaultAddress, decision);
   const base = chain.blockExplorers?.default.url ?? "";
   console.log("[executed]", `${base}/tx/${hash}`);
 }
@@ -41,13 +51,10 @@ async function main() {
   const intervalMs = Number(process.env.AGENT_INTERVAL_MS ?? "60000");
   const context =
     process.env.AGENT_CONTEXT ??
-    "Market is stable. Maintain the vault. Only act if there is a clear, low-risk reason.";
+    "Trade conservatively. Prefer holding unless recent price action gives a clear low-risk edge.";
 
-  console.log("[agent] starting on", chain.name);
+  console.log("[agent] AI trader starting on", chain.name);
 
-  // Chain ticks with setTimeout (not setInterval) + an in-flight guard so a slow tick
-  // (LLM call + tx confirmation can exceed the interval) never overlaps the next one —
-  // overlapping ticks would race on the account nonce and double-submit.
   let running = false;
   const loop = async () => {
     if (!running) {
