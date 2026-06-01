@@ -2,9 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
-import { checkPolicy } from "./policy.js";
-import { chain, aiVaultAddress, dexAddress } from "./config.js";
+import { chain, aiVaultAddress, dexAddress, agentAccount } from "./config.js";
+import { createMockDexOracleRouter } from "./oracles/router.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
+import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
+import { evaluateRisk } from "./risk/engine.js";
+import { simulateExecute } from "./simulation/simulator.js";
 import { sendAlert } from "./telegram.js";
 
 function createReasoningClient(): ReasoningClient {
@@ -19,6 +22,8 @@ function createReasoningClient(): ReasoningClient {
 }
 
 const client = createReasoningClient();
+const protocol = createMockDexAdapter(dexAddress, readPrice);
+const oracleRouter = createMockDexOracleRouter(readPrice);
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
@@ -26,8 +31,8 @@ let peakValueWei = 0n;
 let breakerTripped = false;
 
 async function tick(context: string): Promise<void> {
-  const price = await readPrice();
-  priceHistory.push(price);
+  const oracle = await oracleRouter.getPrice("MNT/MOCK");
+  priceHistory.push(oracle.priceWei);
   if (priceHistory.length > PRICE_HISTORY_MAX) priceHistory.shift();
 
   const state = await readVaultState(aiVaultAddress);
@@ -59,16 +64,24 @@ async function tick(context: string): Promise<void> {
     return;
   }
 
-  const decision = await decide(client, state, priceHistory, dexAddress, context);
+  const decision = await decide(client, state, priceHistory, protocol, context);
   console.log("[decision]", decision.kind, "-", decision.rationale);
   if (decision.kind === "hold") {
     await sendAlert(decision);
     return;
   }
 
-  const policy = checkPolicy(decision, state);
-  if (!policy.ok) {
-    console.log("[guard] blocked:", policy.reason);
+  const simulation = await simulateExecute(aiVaultAddress, decision, agentAccount.address);
+  const risk = evaluateRisk({
+    decision,
+    state,
+    allowedTargets: [protocol.target],
+    allowedSelectors: protocol.allowedSelectors,
+    oracle,
+    simulation,
+  });
+  if (!risk.ok) {
+    console.log("[guard] blocked:", risk.reason);
     return;
   }
 

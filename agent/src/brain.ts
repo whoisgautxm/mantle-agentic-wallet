@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { parseEther } from "viem";
 import { encodeBuy, encodeSell } from "./dex.js";
+import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protocols/types.js";
 import type { Decision, VaultState } from "./types.js";
 
 export const PROPOSE_ACTION_TOOL = {
@@ -77,6 +78,37 @@ export function parseToolUse(input: any, dex: `0x${string}`): Decision {
   throw new Error(`unknown action: ${input?.action}`);
 }
 
+export function parseToolUseIntent(input: any): TradeIntent | { action: "hold"; rationale: string } {
+  if (input?.action === "hold") {
+    return { action: "hold", rationale: String(input.rationale ?? "") };
+  }
+  if (input?.action === "buy") {
+    if (input.amountMnt === undefined) throw new Error("buy missing amountMnt");
+    return {
+      action: "buy",
+      amountMntWei: parsePositiveEtherAmount(input.amountMnt, "amountMnt"),
+      rationale: String(input.rationale ?? ""),
+    };
+  }
+  if (input?.action === "sell") {
+    if (input.amountToken === undefined) throw new Error("sell missing amountToken");
+    return {
+      action: "sell",
+      amountTokenWei: parsePositiveEtherAmount(input.amountToken, "amountToken"),
+      rationale: String(input.rationale ?? ""),
+    };
+  }
+  throw new Error(`unknown action: ${input?.action}`);
+}
+
+async function buildDecisionFromToolUse(input: any, adapter: ProtocolAdapter): Promise<Decision> {
+  const intent = parseToolUseIntent(input);
+  if (intent.action === "hold") return { kind: "hold", rationale: intent.rationale };
+  const quote = await adapter.quote(intent);
+  const plan = adapter.buildPlan(intent, quote);
+  return planToDecision(plan, intent.rationale);
+}
+
 function buildSystemPrompt(state: VaultState): string {
   return (
     "You are an ACTIVE mean-reversion trading agent for a smart-contract vault on Mantle, " +
@@ -107,7 +139,7 @@ async function decideWithAnthropic(
   client: Anthropic,
   state: VaultState,
   priceHistory: bigint[],
-  dex: `0x${string}`,
+  adapter: ProtocolAdapter,
   context: string,
 ): Promise<Decision> {
   const msg = await client.messages.create({
@@ -123,14 +155,14 @@ async function decideWithAnthropic(
   if (!toolUse || toolUse.type !== "tool_use") {
     throw new Error("model did not call propose_action");
   }
-  return parseToolUse(toolUse.input, dex);
+  return buildDecisionFromToolUse(toolUse.input, adapter);
 }
 
 async function decideWithOpenAI(
   client: OpenAI,
   state: VaultState,
   priceHistory: bigint[],
-  dex: `0x${string}`,
+  adapter: ProtocolAdapter,
   context: string,
 ): Promise<Decision> {
   const response = await client.responses.create({
@@ -157,7 +189,7 @@ async function decideWithOpenAI(
   if (!toolCall) {
     throw new Error("model did not call propose_action");
   }
-  return parseToolUse(JSON.parse(toolCall.arguments ?? "{}"), dex);
+  return buildDecisionFromToolUse(JSON.parse(toolCall.arguments ?? "{}"), adapter);
 }
 
 /// Calls the configured model provider and returns a parsed Decision.
@@ -165,14 +197,14 @@ export async function decide(
   client: ReasoningClient,
   state: VaultState,
   priceHistory: bigint[],
-  dex: `0x${string}`,
+  adapter: ProtocolAdapter,
   context: string,
 ): Promise<Decision> {
   if (client.provider === "openai") {
     if (!client.openai) throw new Error("OpenAI client missing");
-    return decideWithOpenAI(client.openai, state, priceHistory, dex, context);
+    return decideWithOpenAI(client.openai, state, priceHistory, adapter, context);
   }
 
   if (!client.anthropic) throw new Error("Anthropic client missing");
-  return decideWithAnthropic(client.anthropic, state, priceHistory, dex, context);
+  return decideWithAnthropic(client.anthropic, state, priceHistory, adapter, context);
 }
