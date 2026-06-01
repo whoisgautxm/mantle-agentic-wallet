@@ -4,12 +4,16 @@ import addresses from "../../shared/addresses.json";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const fromBlock = BigInt(addresses.deployBlock ?? 0);
-const LOG_CHUNK_SIZE = 9n; // Alchemy free tier allows up to 10 blocks per eth_getLogs request.
-const LOG_LOOKBACK_BLOCKS = BigInt(process.env.LOG_LOOKBACK_BLOCKS ?? "30");
+// Log reads need a wide-range RPC. The public Mantle RPC serves the full deployBlock->latest
+// range; Alchemy's free tier caps eth_getLogs at 10 blocks, which would force hundreds of
+// chunked calls and (as previously configured) only show ~1 minute of history. Override with
+// LOGS_RPC_URL if needed; LOG_CHUNK_SIZE is just a safety bound for very long runs.
+const LOGS_RPC_URL = process.env.LOGS_RPC_URL ?? "https://rpc.sepolia.mantle.xyz";
+const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "9000");
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,
-  transport: http(process.env.MANTLE_RPC_URL),
+  transport: http(LOGS_RPC_URL),
 });
 
 const DECISION_EVENT = parseAbiItem(
@@ -52,10 +56,9 @@ async function getChunkedLogs<TEvent extends typeof DECISION_EVENT | typeof PRIC
   event: TEvent,
 ) {
   const latest = await client.getBlockNumber();
-  const scanFrom = latest > LOG_LOOKBACK_BLOCKS ? latest - LOG_LOOKBACK_BLOCKS : fromBlock;
-  const firstBlock = scanFrom > fromBlock ? scanFrom : fromBlock;
+  // Scan the full history from the deploy block so the chart shows the entire run.
   const logs = [];
-  for (let start = firstBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
+  for (let start = fromBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
     const end = start + LOG_CHUNK_SIZE > latest ? latest : start + LOG_CHUNK_SIZE;
     logs.push(...(await client.getLogs({ address, event, fromBlock: start, toBlock: end } as any)));
   }

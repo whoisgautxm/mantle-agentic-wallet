@@ -1,5 +1,5 @@
 import { getDecisions, getPriceHistory, getTrades } from "../lib/events";
-import { buildSeries } from "../lib/pnl";
+import { buildSeries, currentStanding } from "../lib/pnl";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
 import addresses from "../../shared/addresses.json";
@@ -14,6 +14,15 @@ function short(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function mnt(wei: bigint): string {
+  return `${(Number(wei) / 1e18).toFixed(5)} MNT`;
+}
+
+function pct(bps: bigint): string {
+  const v = Number(bps) / 100;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
+
 export default async function Page() {
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
@@ -23,7 +32,7 @@ export default async function Page() {
   const prices = await getPriceHistory();
   const trades = await getTrades();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
-  const last = series[series.length - 1];
+  const standing = currentStanding(series);
 
   return (
     <main>
@@ -47,20 +56,24 @@ export default async function Page() {
 
       <section className="stats">
         <div>
-          <span>Price Points</span>
-          <strong>{prices.length}</strong>
+          <span>AI Portfolio</span>
+          <strong>{mnt(standing.aiPortfolioWei)}</strong>
+          <span>{pct(standing.aiRoiBps)} ROI</span>
         </div>
         <div>
-          <span>Trades</span>
-          <strong>{trades.length}</strong>
+          <span>Baseline Portfolio</span>
+          <strong>{mnt(standing.baselinePortfolioWei)}</strong>
+          <span>{pct(standing.baselineRoiBps)} ROI</span>
         </div>
         <div>
-          <span>AI Token Value</span>
-          <strong>{last ? (Number(BigInt(last.aiTokenValueWei)) / 1e18).toFixed(5) : "0.00000"} MNT</strong>
+          <span>Leader</span>
+          <strong>{standing.leader}</strong>
+          <span>{pct(standing.edgeBps)} AI vs baseline</span>
         </div>
         <div>
-          <span>Baseline Token Value</span>
-          <strong>{last ? (Number(BigInt(last.baselineTokenValueWei)) / 1e18).toFixed(5) : "0.00000"} MNT</strong>
+          <span>Activity</span>
+          <strong>{trades.length} trades</strong>
+          <span>{prices.length} price points</span>
         </div>
       </section>
 
@@ -68,7 +81,7 @@ export default async function Page() {
         <div className="section-head">
           <div>
             <p className="eyebrow">On-chain replay</p>
-            <h2>Price and token-value timeline</h2>
+            <h2>Price and total-portfolio timeline</h2>
           </div>
           <span>Auto-refreshes every 15s</span>
         </div>
