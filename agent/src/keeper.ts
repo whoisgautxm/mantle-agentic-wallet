@@ -1,4 +1,5 @@
 import { publicClient, getOwnerWalletClient, dexAddress } from "./config.js";
+import { readPrice } from "./chain.js";
 import { DEX_ABI } from "./dex.js";
 
 const STEP_BPS = 300n; // +/- 3% per tick
@@ -18,11 +19,7 @@ async function setPrice(next: bigint): Promise<`0x${string}`> {
 }
 
 async function tick(): Promise<void> {
-  const current = (await publicClient.readContract({
-    address: dexAddress,
-    abi: DEX_ABI,
-    functionName: "price",
-  })) as bigint;
+  const current = await readPrice();
   const block = await publicClient.getBlock();
   const delta = (current * STEP_BPS) / 10_000n;
   let next = block.timestamp % 2n === 0n ? current + delta : current - delta;
