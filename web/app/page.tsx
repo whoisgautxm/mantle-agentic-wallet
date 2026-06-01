@@ -33,7 +33,7 @@ export default async function Page() {
           <p className="eyebrow">Mantle Turing Test Demo</p>
           <h1>Human vs AI trading wallet</h1>
           <p className="lede">
-            Claude trades through a guarded vault while a deterministic DCA baseline runs beside it. Every action,
+            An OpenAI-powered trader runs through a guarded vault while a deterministic DCA baseline runs beside it. Every action,
             price update, and trade is reconstructed from on-chain events.
           </p>
         </div>
