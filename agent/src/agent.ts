@@ -78,7 +78,7 @@ async function tick(context: string): Promise<void> {
   }
 
   const hash = await submitExecute(aiVaultAddress, decision);
-  const base = chain.blockExplorers?.default.url ?? "";
+  const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[executed]", `${base}/tx/${hash}`);
   await sendAlert(decision, hash);
 }

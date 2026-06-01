@@ -34,7 +34,7 @@ async function tick(): Promise<void> {
   }
 
   const hash = await submitExecute(baselineVaultAddress, decision, getBaselineWalletClient());
-  const base = chain.blockExplorers?.default.url ?? "";
+  const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[baseline executed]", `${base}/tx/${hash}`);
 }
 
