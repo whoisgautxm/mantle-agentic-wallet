@@ -11,23 +11,23 @@ contract Deploy is Script {
         address aiAgent = vm.addr(vm.envUint("AGENT_PRIVATE_KEY"));
         address baselineAgent = vm.addr(vm.envUint("BASELINE_PRIVATE_KEY"));
 
-        // Conservative testnet limits: 0.05 MNT per tx, 0.2 MNT per day.
-        uint256 perTx = 0.05 ether;
-        uint256 daily = 0.2 ether;
+        // Demo limits: roomy enough for a long live run (many trades) while still bounded.
+        uint256 perTx = 0.1 ether;
+        uint256 daily = 5 ether;
         uint256 startPrice = 2 ether; // 2 MNT per token
 
         vm.startBroadcast(deployerKey);
         MockDEX dex = new MockDEX(startPrice);
-        (bool okDex,) = address(dex).call{value: 0.5 ether}("");
+        (bool okDex,) = address(dex).call{value: 3 ether}(""); // liquidity to pay out sells
         require(okDex, "dex seed failed");
 
         AgentVault aiVault = new AgentVault(aiAgent, perTx, daily);
-        (bool okAi,) = address(aiVault).call{value: 0.2 ether}("");
+        (bool okAi,) = address(aiVault).call{value: 1 ether}(""); // equal starting capital
         require(okAi, "ai seed failed");
         aiVault.setAllowedTarget(address(dex), true);
 
         AgentVault baselineVault = new AgentVault(baselineAgent, perTx, daily);
-        (bool okBaseline,) = address(baselineVault).call{value: 0.2 ether}("");
+        (bool okBaseline,) = address(baselineVault).call{value: 1 ether}(""); // equal starting capital
         require(okBaseline, "baseline seed failed");
         baselineVault.setAllowedTarget(address(dex), true);
         vm.stopBroadcast();

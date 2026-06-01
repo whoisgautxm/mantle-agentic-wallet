@@ -2,9 +2,9 @@ import { publicClient, getOwnerWalletClient, dexAddress } from "./config.js";
 import { readPrice } from "./chain.js";
 import { DEX_ABI } from "./dex.js";
 
-const STEP_BPS = 300n; // +/- 3% per tick
-const MIN_PRICE = 1n * 10n ** 18n;
-const MAX_PRICE = 5n * 10n ** 18n;
+const MIN_PRICE = 5n * 10n ** 17n; // 0.5 MNT/token floor
+const MAX_PRICE = 6n * 10n ** 18n; // 6 MNT/token ceiling
+const CENTER = 2n * 10n ** 18n; // mean-reversion target
 
 async function setPrice(next: bigint): Promise<`0x${string}`> {
   const ownerWalletClient = getOwnerWalletClient();
@@ -20,9 +20,11 @@ async function setPrice(next: bigint): Promise<`0x${string}`> {
 
 async function tick(): Promise<void> {
   const current = await readPrice();
-  const block = await publicClient.getBlock();
-  const delta = (current * STEP_BPS) / 10_000n;
-  let next = block.timestamp % 2n === 0n ? current + delta : current - delta;
+  // Volatile random step (±6% in basis points) ...
+  const rndBps = BigInt(Math.floor(Math.random() * 1200) - 600); // -600..+599
+  let next = current + (current * rndBps) / 10_000n;
+  // ... plus 10% mean reversion toward CENTER so the market trends but never sticks at a bound.
+  next = next + (CENTER - next) / 10n;
   if (next < MIN_PRICE) next = MIN_PRICE;
   if (next > MAX_PRICE) next = MAX_PRICE;
 
