@@ -26,26 +26,79 @@ export const VAULT_ABI = [
 type ExecuteDecision = Extract<Decision, { kind: "execute" }>;
 type AgentWalletClient = typeof walletClient;
 
+const READ_RETRY_DELAY_MS = 2500;
+const READ_RETRIES = 5;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimit(error: unknown): boolean {
+  const e = error as any;
+  const text = [
+    e?.details,
+    e?.shortMessage,
+    e?.message,
+    e?.cause?.details,
+    e?.cause?.shortMessage,
+    e?.cause?.message,
+    e?.cause?.cause?.message,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return text.includes("rate limit");
+}
+
+async function retryRead<T>(label: string, read: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= READ_RETRIES; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimit(error) || attempt === READ_RETRIES) break;
+      const delay = READ_RETRY_DELAY_MS * (attempt + 1);
+      console.warn(`[rpc] ${label} rate-limited; retrying in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
 export async function readPrice(): Promise<bigint> {
-  return (await publicClient.readContract({
-    address: dexAddress,
-    abi: DEX_ABI,
-    functionName: "price",
-  })) as bigint;
+  return retryRead(
+    "price",
+    async () =>
+      (await publicClient.readContract({
+        address: dexAddress,
+        abi: DEX_ABI,
+        functionName: "price",
+      })) as bigint,
+  );
 }
 
 export async function readVaultState(vault: `0x${string}` = aiVaultAddress): Promise<VaultState> {
-  const [balanceWei, spendLimitPerTx, dailyLimit, spentToday, windowStart, paused, tokenBalanceWei, priceWei] =
-    await Promise.all([
-      publicClient.getBalance({ address: vault }),
-      publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spendLimitPerTx" }),
-      publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "dailyLimit" }),
-      publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spentToday" }),
-      publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "windowStart" }),
-      publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "paused" }),
-      publicClient.readContract({ address: dexAddress, abi: DEX_ABI, functionName: "tokenBalance", args: [vault] }),
-      readPrice(),
-    ]);
+  const balanceWei = await retryRead("vault balance", () => publicClient.getBalance({ address: vault }));
+  const spendLimitPerTx = await retryRead("spendLimitPerTx", () =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spendLimitPerTx" }),
+  );
+  const dailyLimit = await retryRead("dailyLimit", () =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "dailyLimit" }),
+  );
+  const spentToday = await retryRead("spentToday", () =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spentToday" }),
+  );
+  const windowStart = await retryRead("windowStart", () =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "windowStart" }),
+  );
+  const paused = await retryRead("paused", () =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "paused" }),
+  );
+  const tokenBalanceWei = await retryRead("tokenBalance", () =>
+    publicClient.readContract({ address: dexAddress, abi: DEX_ABI, functionName: "tokenBalance", args: [vault] }),
+  );
+  const priceWei = await readPrice();
 
   return {
     balanceWei,
@@ -83,10 +136,14 @@ export async function isTargetAllowed(
 ): Promise<boolean> {
   const vault = maybeTarget ? vaultOrTarget : aiVaultAddress;
   const target = maybeTarget ?? vaultOrTarget;
-  return (await publicClient.readContract({
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "allowedTarget",
-    args: [target],
-  })) as boolean;
+  return retryRead(
+    "allowedTarget",
+    async () =>
+      (await publicClient.readContract({
+        address: vault,
+        abi: VAULT_ABI,
+        functionName: "allowedTarget",
+        args: [target],
+      })) as boolean,
+  );
 }

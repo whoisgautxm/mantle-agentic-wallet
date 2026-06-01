@@ -4,6 +4,8 @@ import addresses from "../../shared/addresses.json";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const fromBlock = BigInt(addresses.deployBlock ?? 0);
+const LOG_CHUNK_SIZE = 9n; // Alchemy free tier allows up to 10 blocks per eth_getLogs request.
+const LOG_LOOKBACK_BLOCKS = BigInt(process.env.LOG_LOOKBACK_BLOCKS ?? "30");
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,
@@ -45,13 +47,24 @@ function deployed(address: string | undefined): address is `0x${string}` {
   return Boolean(address && address !== ZERO);
 }
 
+async function getChunkedLogs<TEvent extends typeof DECISION_EVENT | typeof PRICE_SET_EVENT | typeof BOUGHT_EVENT | typeof SOLD_EVENT>(
+  address: `0x${string}`,
+  event: TEvent,
+) {
+  const latest = await client.getBlockNumber();
+  const scanFrom = latest > LOG_LOOKBACK_BLOCKS ? latest - LOG_LOOKBACK_BLOCKS : fromBlock;
+  const firstBlock = scanFrom > fromBlock ? scanFrom : fromBlock;
+  const logs = [];
+  for (let start = firstBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
+    const end = start + LOG_CHUNK_SIZE > latest ? latest : start + LOG_CHUNK_SIZE;
+    logs.push(...(await client.getLogs({ address, event, fromBlock: start, toBlock: end } as any)));
+  }
+  return logs as any[];
+}
+
 export async function getDecisions(vault?: `0x${string}`): Promise<DecisionLog[]> {
   if (!deployed(vault)) return [];
-  const logs = await client.getLogs({
-    address: vault,
-    event: DECISION_EVENT,
-    fromBlock,
-  });
+  const logs = await getChunkedLogs(vault, DECISION_EVENT);
   return logs
     .map((l) => ({
       nonce: l.args.nonce?.toString() ?? "",
@@ -67,11 +80,7 @@ export async function getDecisions(vault?: `0x${string}`): Promise<DecisionLog[]
 export async function getPriceHistory(): Promise<PricePoint[]> {
   const dex = addresses.mockDex as `0x${string}`;
   if (!deployed(dex)) return [];
-  const logs = await client.getLogs({
-    address: dex,
-    event: PRICE_SET_EVENT,
-    fromBlock,
-  });
+  const logs = await getChunkedLogs(dex, PRICE_SET_EVENT);
   return logs.map((l) => ({
     block: l.blockNumber ?? 0n,
     price: (l.args.price as bigint | undefined) ?? 0n,
@@ -81,10 +90,8 @@ export async function getPriceHistory(): Promise<PricePoint[]> {
 export async function getTrades(): Promise<Trade[]> {
   const dex = addresses.mockDex as `0x${string}`;
   if (!deployed(dex)) return [];
-  const [buys, sells] = await Promise.all([
-    client.getLogs({ address: dex, event: BOUGHT_EVENT, fromBlock }),
-    client.getLogs({ address: dex, event: SOLD_EVENT, fromBlock }),
-  ]);
+  const buys = await getChunkedLogs(dex, BOUGHT_EVENT);
+  const sells = await getChunkedLogs(dex, SOLD_EVENT);
 
   const trades: Trade[] = [
     ...buys.map((l) => ({

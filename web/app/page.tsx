@@ -18,12 +18,10 @@ export default async function Page() {
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
 
-  const [aiDecisions, baselineDecisions, prices, trades] = await Promise.all([
-    getDecisions(aiVault),
-    getDecisions(baselineVault),
-    getPriceHistory(),
-    getTrades(),
-  ]);
+  const aiDecisions = await getDecisions(aiVault);
+  const baselineDecisions = await getDecisions(baselineVault);
+  const prices = await getPriceHistory();
+  const trades = await getTrades();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const last = series[series.length - 1];
 
