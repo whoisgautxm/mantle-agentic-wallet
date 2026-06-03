@@ -84,6 +84,7 @@ Current project state:
 - Dashboard can show active, standby, stale, or fallback state.
 - Risk engine already blocks stale oracle snapshots.
 - Agent and baseline JSONL traces preserve oracle, quote, risk, simulation, and final-action evidence for evals.
+- Trace eval runner grades local JSONL traces for policy obedience.
 
 Next integration:
 

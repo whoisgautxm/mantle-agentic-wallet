@@ -10,7 +10,17 @@ Turn the AI wallet into a measurable benchmark. Every prompt, model, risk-rule, 
 
 ## Current Project Fit
 
-The project already has unit tests for policy, PnL, Telegram, and model tool parsing. The next step is behavioral evaluation:
+The project now has unit tests for policy, PnL, Telegram, model tool parsing, tracing, and trace evaluation. Local JSONL traces capture observations, quotes, oracle snapshots, decisions, simulations, risk results, and final actions.
+
+Implemented v1:
+
+- `npm run eval:traces` reads a trace JSONL file.
+- It grades whether executed ticks had passing risk and simulation results.
+- It verifies failed risk/simulation outcomes do not execute.
+- It flags stale-oracle execution.
+- It can write a JSON summary for reports and dashboards.
+
+The next step is scenario-based behavioral evaluation:
 
 - Did the agent choose a safe action?
 - Did it obey limits?
@@ -90,10 +100,10 @@ The OpenAI Agents SDK has built-in tracing for model generations, tool calls, gu
 
 ## Acceptance Criteria
 
-- `npm run evals` executes deterministic scenarios.
+- `npm run eval:traces` grades replayed JSONL traces. Implemented.
 - A failed risk rule can be graded as a success if the agent was blocked safely.
-- Results are written to JSON for the dashboard/report.
-- Prompt/model changes can be compared run-to-run.
+- Results can be written to JSON for the dashboard/report.
+- Prompt/model changes can be compared run-to-run once deterministic scenarios are added.
 
 ## Resources
 

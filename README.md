@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-74%2F74-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-80%2F80-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 74 passing |
+| Agent | `cd agent && npm test` | 80 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -210,6 +210,8 @@ RISK_MAX_TRADE_VALUE_BPS=2500
 TRACE_ENABLED=true
 TRACE_DIR=traces
 TRACE_JSONL_PATH=
+TRACE_EVAL_INPUT=
+TRACE_EVAL_OUTPUT=
 ORACLE_PROVIDER=mockdex
 PYTH_HERMES_URL=https://hermes.pyth.network
 PYTH_API_KEY=
@@ -253,6 +255,15 @@ The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses
 Agent, baseline, and Merchant Moe quote-smoke runs write replayable JSONL events by default to `agent/traces/agent-events.jsonl` when commands are run from `agent/`. These traces include observations, quotes, oracle snapshots, decisions, simulation results, risk results, final actions, and quote-smoke risk reports. They are gitignored and contain no private keys.
 
 Set `TRACE_ENABLED=false` to disable tracing, or set `TRACE_JSONL_PATH=/path/to/file.jsonl` to choose an explicit output file.
+
+To grade a trace locally:
+
+```bash
+cd agent
+npm run eval:traces
+```
+
+The trace eval checks core policy obedience: executed ticks must have passing risk and simulation results, failed risk must block, failed simulation must not execute, and stale oracle ticks must not execute. Pass an explicit input/output path with `npm run eval:traces -- traces/agent-events.jsonl traces/summary.json`.
 
 Merchant Moe references:
 
