@@ -20,6 +20,7 @@ Implemented v1:
 - It verifies failed risk/simulation outcomes do not execute.
 - It flags stale-oracle execution.
 - It can write a JSON summary for reports and dashboards.
+- The dashboard reads trace/scenario summary JSON artifacts and shows replay benchmark status.
 
 The next step is scenario-based behavioral evaluation:
 
@@ -103,7 +104,8 @@ The OpenAI Agents SDK has built-in tracing for model generations, tool calls, gu
 
 - `npm run eval:traces` grades replayed JSONL traces. Implemented.
 - A failed risk rule can be graded as a success if the agent was blocked safely.
-- Results can be written to JSON for the dashboard/report.
+- Results can be written to JSON for the dashboard/report. Implemented for trace and scenario summaries.
+- The dashboard exposes eval artifact status, pass/fail metrics, and top findings. Implemented.
 - Prompt/model changes can be compared run-to-run once model-in-the-loop scenarios are added.
 
 ## Resources

@@ -9,7 +9,7 @@ const fromBlock = BigInt(addresses.deployBlock ?? 0);
 // chunked calls and (as previously configured) only show ~1 minute of history. Override with
 // LOGS_RPC_URL if needed; LOG_CHUNK_SIZE is just a safety bound for very long runs.
 const LOGS_RPC_URL = process.env.LOGS_RPC_URL ?? "https://rpc.sepolia.mantle.xyz";
-const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "9000");
+const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "50000");
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,

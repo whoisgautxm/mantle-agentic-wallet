@@ -191,6 +191,8 @@ Copy `.env.example` to `.env` and fill in:
 
 ```bash
 MANTLE_RPC_URL=https://rpc.sepolia.mantle.xyz
+LOGS_RPC_URL=https://rpc.sepolia.mantle.xyz
+LOG_CHUNK_SIZE=50000
 DEPLOYER_PRIVATE_KEY=0x...
 AGENT_PRIVATE_KEY=0x...
 BASELINE_PRIVATE_KEY=0x...
@@ -265,7 +267,7 @@ cd agent
 npm run eval:traces
 ```
 
-The trace eval checks core policy obedience: executed ticks must have passing risk and simulation results, failed risk must block, failed simulation must not execute, and stale oracle ticks must not execute. Pass an explicit input/output path with `npm run eval:traces -- traces/agent-events.jsonl traces/summary.json`.
+The trace eval checks core policy obedience: executed ticks must have passing risk and simulation results, failed risk must block, failed simulation must not execute, and stale oracle ticks must not execute. Pass an explicit input/output path with `npm run eval:traces -- traces/agent-events.jsonl traces/trace-summary.json`.
 
 To run deterministic risk scenarios without RPC, private keys, or model calls:
 
@@ -275,6 +277,16 @@ npm run eval:scenarios
 ```
 
 The default scenario pack covers safe buys, stale oracle blocks, failed simulation blocks, disallowed targets, and oversized trades. Pass a custom scenario directory/output path with `npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json`.
+
+The dashboard reads these summary artifacts when present:
+
+```bash
+cd agent
+npm run eval:traces -- traces/agent-events.jsonl traces/trace-summary.json
+npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
+```
+
+If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
 Merchant Moe references:
 
@@ -350,6 +362,7 @@ The dashboard now includes protocol readiness alongside the replay:
 - Pyth oracle active/standby/fallback state
 - execution simulation gate status
 - ERC20 portfolio and allowance watch configuration
+- eval/readiness cards for JSONL trace replay and deterministic scenario packs
 
 ---
 

@@ -227,6 +227,100 @@ h2 {
   line-height: 1.45;
 }
 
+.eval-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.eval-card {
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(216, 164, 71, 0.09), transparent 42%),
+    rgba(10, 8, 5, 0.34);
+  padding: 16px;
+}
+
+.eval-card-head,
+.eval-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.eval-card-head strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.eval-card-head span,
+.eval-card p,
+.eval-footer,
+.eval-findings span {
+  color: var(--muted);
+}
+
+.eval-card p {
+  line-height: 1.5;
+}
+
+.eval-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.eval-metrics > div {
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 10px;
+}
+
+.eval-metrics span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.eval-metrics strong {
+  display: block;
+  margin-top: 5px;
+}
+
+.eval-findings {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.eval-findings span {
+  border-left: 2px solid rgba(255, 118, 118, 0.72);
+  padding-left: 10px;
+  line-height: 1.4;
+}
+
+.eval-footer {
+  margin-top: 14px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+}
+
+.eval-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 10px;
+  border: 1px solid rgba(114, 168, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(114, 168, 255, 0.07);
+  color: #d8e6ff;
+  padding: 10px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+}
+
 .portfolio-table {
   display: grid;
   gap: 8px;
@@ -378,6 +472,8 @@ h2 {
   }
 
   .metric-grid,
+  .eval-grid,
+  .eval-metrics,
   .risk-row,
   .protocol-row,
   .table-head,

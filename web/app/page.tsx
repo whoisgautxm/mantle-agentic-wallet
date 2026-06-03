@@ -6,7 +6,9 @@ import OraclePanel from "./components/OraclePanel";
 import PortfolioPanel from "./components/PortfolioPanel";
 import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
+import EvalReadinessPanel from "./components/EvalReadinessPanel";
 import addresses from "../../shared/addresses.json";
+import { getEvalReadiness } from "../lib/evalReadiness";
 import { getPortfolioStatus } from "../lib/portfolio";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
 import { getLiveStatus } from "../lib/status";
@@ -30,20 +32,37 @@ function pct(bps: bigint): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
+async function safeRead<T>(label: string, read: () => Promise<T>, fallback: T): Promise<{ value: T; warning?: string }> {
+  try {
+    return { value: await read() };
+  } catch (error) {
+    const e = error as any;
+    return { value: fallback, warning: `${label}: ${e?.shortMessage ?? e?.message ?? "unavailable"}` };
+  }
+}
+
 export default async function Page() {
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
 
-  const aiDecisions = await getDecisions(aiVault);
-  const baselineDecisions = await getDecisions(baselineVault);
-  const prices = await getPriceHistory();
-  const trades = await getTrades();
+  const aiDecisionsResult = await safeRead("AI decisions", () => getDecisions(aiVault), []);
+  const baselineDecisionsResult = await safeRead("baseline decisions", () => getDecisions(baselineVault), []);
+  const pricesResult = await safeRead("price history", getPriceHistory, []);
+  const tradesResult = await safeRead("trade history", getTrades, []);
+  const aiDecisions = aiDecisionsResult.value;
+  const baselineDecisions = baselineDecisionsResult.value;
+  const prices = pricesResult.value;
+  const trades = tradesResult.value;
+  const eventWarnings = [aiDecisionsResult, baselineDecisionsResult, pricesResult, tradesResult]
+    .map((result) => result.warning)
+    .filter(Boolean);
   const liveStatus = await getLiveStatus();
   const portfolioStatus = await getPortfolioStatus([
     { name: "AI", address: aiVault },
     { name: "Baseline", address: baselineVault },
   ]);
   const protocolReadiness = getProtocolReadiness(liveStatus, portfolioStatus);
+  const evalReadiness = await getEvalReadiness();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const standing = currentStanding(series);
 
@@ -102,6 +121,33 @@ export default async function Page() {
       <section className="insights single">
         <PortfolioPanel status={portfolioStatus} />
       </section>
+
+      <section className="insights single">
+        <EvalReadinessPanel readiness={evalReadiness} />
+      </section>
+
+      {eventWarnings.length ? (
+        <section className="insights single">
+          <section className="insight-card">
+            <div className="section-head compact">
+              <div>
+                <p className="eyebrow">Chain replay</p>
+                <h2>RPC degraded</h2>
+              </div>
+              <span className="badge warn">Fallback</span>
+            </div>
+            <p className="muted panel-note">
+              Some event-log reads failed, so the chart or feeds may be temporarily incomplete while local eval/protocol panels
+              still render.
+            </p>
+            <div className="eval-findings">
+              {eventWarnings.map((warning) => (
+                <span key={warning}>{warning}</span>
+              ))}
+            </div>
+          </section>
+        </section>
+      ) : null}
 
       <section className="chart-card">
         <div className="section-head">

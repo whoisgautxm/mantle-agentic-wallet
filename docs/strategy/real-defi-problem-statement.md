@@ -86,6 +86,7 @@ Current project state:
 - Agent and baseline JSONL traces preserve oracle, quote, risk, simulation, and final-action evidence for evals.
 - Trace eval runner grades local JSONL traces for policy obedience.
 - Scenario eval runner grades deterministic stale-oracle, failed-simulation, bad-target, safe-buy, and oversized-trade cases.
+- Dashboard replay benchmark cards surface trace/scenario eval artifacts for reports and demos.
 
 Next integration:
 
