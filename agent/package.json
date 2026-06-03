@@ -6,7 +6,8 @@
     "test": "vitest run",
     "start": "tsx src/agent.ts",
     "keeper": "tsx src/keeper.ts",
-    "baseline": "tsx src/baseline.ts"
+    "baseline": "tsx src/baseline.ts",
+    "quote:merchant-moe": "tsx src/merchantMoeQuoteSmoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

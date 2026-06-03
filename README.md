@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-64%2F64-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-68%2F68-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 64 passing |
+| Agent | `cd agent && npm test` | 68 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -218,6 +218,8 @@ MERCHANT_MOE_CHAIN_ID=5000
 MERCHANT_MOE_RPC_URL=
 MERCHANT_MOE_LB_QUOTER=0x501b8AFd35df20f531fF45F6f695793AC3316c85
 MERCHANT_MOE_LB_ROUTER=0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a
+MERCHANT_MOE_ROUTE=
+MERCHANT_MOE_AMOUNT_IN_WEI=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
@@ -227,6 +229,16 @@ Use testnet keys only. `.env` is gitignored.
 `ORACLE_PROVIDER=mockdex` keeps the current Sepolia demo deterministic. `ORACLE_PROVIDER=pyth` switches the agent and dashboard to a read-only Pyth Hermes MNT/USD reference with MockDEX fallback if Hermes is unavailable. The Pyth MNT/USD feed is inverted into a MNT-per-USD-style reference so it can be compared against the current MockDEX demo price.
 
 Merchant Moe settings are read-only Mantle mainnet quote settings. They are used for adapter research and route/allowance readiness, not live execution from the Sepolia demo vaults.
+
+To smoke-test a real Merchant Moe quote without execution:
+
+```bash
+cd agent
+set -a && source ../.env && set +a
+npm run quote:merchant-moe
+```
+
+The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
 
 Merchant Moe references:
 
