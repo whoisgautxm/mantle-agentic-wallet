@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-70%2F70-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-74%2F74-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 70 passing |
+| Agent | `cd agent && npm test` | 74 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -207,6 +207,9 @@ KEEPER_INTERVAL_MS=45000
 RISK_MAX_DEX_ORACLE_DEVIATION_BPS=300
 RISK_MAX_POSITION_BPS=7000
 RISK_MAX_TRADE_VALUE_BPS=2500
+TRACE_ENABLED=true
+TRACE_DIR=traces
+TRACE_JSONL_PATH=
 ORACLE_PROVIDER=mockdex
 PYTH_HERMES_URL=https://hermes.pyth.network
 PYTH_API_KEY=
@@ -244,6 +247,12 @@ npm run quote:merchant-moe
 ```
 
 The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. Optional decimal/reference settings let it report quote-vs-reference deviation. For MNT -> USD-like routes, `MERCHANT_MOE_REFERENCE_SOURCE=pyth-mnt-usd` compares the normalized token-in/token-out quote against the inverted Pyth MNT/USD feed. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
+
+### Local JSONL Traces
+
+Agent, baseline, and Merchant Moe quote-smoke runs write replayable JSONL events by default to `agent/traces/agent-events.jsonl` when commands are run from `agent/`. These traces include observations, quotes, oracle snapshots, decisions, simulation results, risk results, final actions, and quote-smoke risk reports. They are gitignored and contain no private keys.
+
+Set `TRACE_ENABLED=false` to disable tracing, or set `TRACE_JSONL_PATH=/path/to/file.jsonl` to choose an explicit output file.
 
 Merchant Moe references:
 

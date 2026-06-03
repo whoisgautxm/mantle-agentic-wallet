@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
@@ -11,6 +12,7 @@ import { evaluateRisk } from "./risk/engine.js";
 import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
 import { sendAlert } from "./telegram.js";
+import { createJsonlTraceWriter } from "./tracing.js";
 
 function createReasoningClient(): ReasoningClient {
   const provider = (process.env.AI_PROVIDER ?? "openai").toLowerCase() as ReasoningProvider;
@@ -31,10 +33,29 @@ const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
+const trace = createJsonlTraceWriter();
 let peakValueWei = 0n;
 let breakerTripped = false;
 
+async function recordTrace(type: string, payload: Record<string, unknown>): Promise<void> {
+  try {
+    await trace.append(type, payload);
+  } catch (error) {
+    const e = error as any;
+    console.warn("[trace] write failed:", e?.message ?? "unknown error");
+  }
+}
+
 async function tick(context: string): Promise<void> {
+  const tickId = randomUUID();
+  await recordTrace("agent.tick.started", {
+    tickId,
+    runner: "ai",
+    vault: aiVaultAddress,
+    provider: client.provider,
+    protocolId: protocol.id,
+  });
+
   const oracle = await oracleRouter.getPrice("MNT/MOCK");
   if (oracle.warnings?.length) console.warn("[oracle]", oracle.warnings.join("; "));
   priceHistory.push(oracle.priceWei);
@@ -48,9 +69,23 @@ async function tick(context: string): Promise<void> {
     spentToday: state.spentToday.toString(),
     paused: state.paused,
   });
+  await recordTrace("agent.observation", {
+    tickId,
+    runner: "ai",
+    vault: aiVaultAddress,
+    oracle,
+    state,
+    priceHistory,
+  });
 
   if (state.paused) {
     console.log("[paused] skipping");
+    await recordTrace("agent.final_action", {
+      tickId,
+      runner: "ai",
+      outcome: "hold",
+      reason: "vault paused",
+    });
     return;
   }
 
@@ -66,17 +101,67 @@ async function tick(context: string): Promise<void> {
         drawdownBps: drawdownBps.toString(),
       });
     }
+    await recordTrace("agent.final_action", {
+      tickId,
+      runner: "ai",
+      outcome: "hold",
+      reason: "drawdown breaker",
+      portfolioValue,
+      peakValueWei,
+      drawdownBps,
+    });
     return;
   }
 
-  const decision = await decide(client, state, priceHistory, protocol, context);
+  const adapterTrace: Record<string, unknown> = {};
+  const tracedProtocol = {
+    ...protocol,
+    async quote(intent: Parameters<typeof protocol.quote>[0]) {
+      adapterTrace.intent = intent;
+      const quote = await protocol.quote(intent);
+      adapterTrace.quote = quote;
+      await recordTrace("agent.quote", {
+        tickId,
+        runner: "ai",
+        protocolId: protocol.id,
+        intent,
+        quote,
+      });
+      return quote;
+    },
+    buildPlan(intent: Parameters<typeof protocol.buildPlan>[0], quote: Parameters<typeof protocol.buildPlan>[1]) {
+      const plan = protocol.buildPlan(intent, quote);
+      adapterTrace.plan = plan;
+      return plan;
+    },
+  };
+
+  const decision = await decide(client, state, priceHistory, tracedProtocol, context);
   console.log("[decision]", decision.kind, "-", decision.rationale);
+  await recordTrace("agent.decision", {
+    tickId,
+    runner: "ai",
+    decision,
+    ...adapterTrace,
+  });
   if (decision.kind === "hold") {
     await sendAlert(decision);
+    await recordTrace("agent.final_action", {
+      tickId,
+      runner: "ai",
+      outcome: "hold",
+      decision,
+    });
     return;
   }
 
   const simulation = await simulateExecute(aiVaultAddress, decision, agentAccount.address);
+  await recordTrace("agent.simulation", {
+    tickId,
+    runner: "ai",
+    vault: aiVaultAddress,
+    simulation,
+  });
   const risk = evaluateRisk({
     decision,
     state,
@@ -87,13 +172,34 @@ async function tick(context: string): Promise<void> {
     simulation,
     limits: riskLimits,
   });
+  await recordTrace("agent.risk", {
+    tickId,
+    runner: "ai",
+    risk,
+    limits: riskLimits,
+  });
   if (!risk.ok) {
     console.log("[guard] blocked:", risk.reason);
+    await recordTrace("agent.final_action", {
+      tickId,
+      runner: "ai",
+      outcome: "blocked",
+      reason: risk.reason,
+      ruleId: risk.ruleId,
+      decision,
+    });
     return;
   }
 
   if (!(await isTargetAllowed(aiVaultAddress, decision.target))) {
     console.log("[guard] blocked: target not allowlisted on-chain:", decision.target);
+    await recordTrace("agent.final_action", {
+      tickId,
+      runner: "ai",
+      outcome: "blocked",
+      reason: "target not allowlisted on-chain",
+      decision,
+    });
     return;
   }
 
@@ -101,6 +207,13 @@ async function tick(context: string): Promise<void> {
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[executed]", `${base}/tx/${hash}`);
   await sendAlert(decision, hash);
+  await recordTrace("agent.final_action", {
+    tickId,
+    runner: "ai",
+    outcome: "executed",
+    txHash: hash,
+    decision,
+  });
 }
 
 async function main() {
@@ -119,6 +232,10 @@ async function main() {
         await tick(context);
       } catch (e) {
         console.error("[tick error]", e);
+        await recordTrace("agent.tick.error", {
+          runner: "ai",
+          error: e,
+        });
       } finally {
         running = false;
       }

@@ -53,6 +53,7 @@ Current project state:
 - Merchant Moe read-only LBQuoter adapter exists.
 - Merchant Moe read-only quote smoke CLI exists.
 - Merchant Moe quote smoke can report quote-vs-reference deviation when decimals and a manual or Pyth reference are configured.
+- Merchant Moe quote smoke writes JSONL trace events for replay and reports.
 - Merchant Moe execution is intentionally disabled.
 - ERC20 allowance tracking can watch the LB Router spender.
 - Protocol readiness dashboard shows read-only/execution status.
@@ -60,7 +61,7 @@ Current project state:
 Next integration:
 
 1. Add token route config for WMNT/stables or other verified Mantle pairs.
-2. Persist quote smoke outputs as structured decision/quote traces.
+2. Build eval runners that replay JSONL traces and grade policy obedience.
 3. Add slippage/min-output fields to `ExecutionPlan`.
 4. Run mainnet-fork simulation before enabling calldata generation.
 5. Only then consider guarded live execution.
@@ -82,6 +83,7 @@ Current project state:
 - Read-only Pyth Hermes MNT/USD oracle exists.
 - Dashboard can show active, standby, stale, or fallback state.
 - Risk engine already blocks stale oracle snapshots.
+- Agent and baseline JSONL traces preserve oracle, quote, risk, simulation, and final-action evidence for evals.
 
 Next integration:
 

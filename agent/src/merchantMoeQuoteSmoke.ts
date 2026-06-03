@@ -8,6 +8,7 @@ import {
   type MerchantMoeQuote,
   type MerchantMoeReadOnlyAdapter,
 } from "./protocols/merchantMoeReadOnlyAdapter.js";
+import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const ONE = 10n ** 18n;
@@ -198,12 +199,26 @@ export async function runMerchantMoeQuoteSmoke(
   adapter: Pick<MerchantMoeReadOnlyAdapter, "quoteExactInput">,
   env = process.env,
   write: (message: string) => void = console.log,
+  trace: JsonlTraceWriter = createJsonlTraceWriter({ env }),
 ): Promise<MerchantMoeQuote> {
   const config = parseMerchantMoeQuoteSmokeConfig(env);
   const quote = await adapter.quoteExactInput(config);
   const referencePriceWei = await resolveReferencePriceWei(config);
   const risk = buildMerchantMoeQuoteRiskReport(quote, config, referencePriceWei);
   write(formatMerchantMoeQuote(quote, risk));
+  try {
+    await trace.append("merchant_moe.quote_smoke", {
+      protocolId: quote.protocolId,
+      mode: "read-only",
+      config,
+      quote,
+      risk,
+      executionEnabled: false,
+    });
+  } catch (error) {
+    const e = error as any;
+    console.warn("[merchant-moe] trace write failed:", e?.message ?? "unknown error");
+  }
   return quote;
 }
 

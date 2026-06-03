@@ -1,3 +1,6 @@
+import { mkdtemp, readFile } from "fs/promises";
+import os from "os";
+import path from "path";
 import { describe, expect, it } from "vitest";
 import {
   buildMerchantMoeQuoteRiskReport,
@@ -7,6 +10,7 @@ import {
   runMerchantMoeQuoteSmoke,
 } from "./merchantMoeQuoteSmoke.js";
 import type { MerchantMoeQuote } from "./protocols/merchantMoeReadOnlyAdapter.js";
+import { createJsonlTraceWriter } from "./tracing.js";
 
 const tokenA = "0x1111111111111111111111111111111111111111" as const;
 const tokenB = "0x2222222222222222222222222222222222222222" as const;
@@ -127,9 +131,36 @@ describe("Merchant Moe quote smoke", () => {
         MERCHANT_MOE_AMOUNT_IN_WEI: "100",
       },
       (message) => writes.push(message),
+      createJsonlTraceWriter({ enabled: false }),
     );
 
     expect(result.amountOut).toBe(95n);
     expect(writes[0]).toContain("[merchant-moe] read-only quote smoke");
+  });
+
+  it("writes a JSONL trace event for quote smoke results", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "merchant-moe-trace-"));
+    const trace = createJsonlTraceWriter({ path: path.join(dir, "events.jsonl") });
+    const adapter = {
+      async quoteExactInput() {
+        return quote;
+      },
+    };
+
+    await runMerchantMoeQuoteSmoke(
+      adapter,
+      {
+        MERCHANT_MOE_ROUTE: `${tokenA},${tokenB}`,
+        MERCHANT_MOE_AMOUNT_IN_WEI: "100",
+      },
+      () => undefined,
+      trace,
+    );
+
+    const [event] = (await readFile(trace.path, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(event.type).toBe("merchant_moe.quote_smoke");
+    expect(event.quote.amountOut).toBe("95");
+    expect(event.risk.status).toBe("unchecked");
+    expect(event.executionEnabled).toBe(false);
   });
 });
