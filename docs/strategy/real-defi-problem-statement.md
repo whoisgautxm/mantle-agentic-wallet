@@ -56,13 +56,14 @@ Current project state:
 - Merchant Moe quote smoke writes JSONL trace events for replay and reports.
 - Merchant Moe fork-readiness CLI computes min-output/slippage metadata and blocks execution while calldata is disabled.
 - Merchant Moe fork-simulation CLI writes JSONL evidence and blocks until fork RPC, simulation account, and swap calldata are configured.
+- Merchant Moe route presets harden WMNT/stable routes with verified token addresses, decimals, Pyth MNT/USD reference mode, and quote deviation thresholds.
 - Merchant Moe execution is intentionally disabled.
 - ERC20 allowance tracking can watch the LB Router spender.
 - Protocol readiness dashboard shows read-only/execution status.
 
 Next integration:
 
-1. Add token route config for WMNT/stables or other verified Mantle pairs.
+1. Keep expanding verified token route config for WMNT/stables and other Mantle pairs.
 2. Build eval runners that replay JSONL traces and grade policy obedience.
 3. Add safe LBRouter calldata fixture/builder and run it through mainnet-fork simulation.
 4. Only then consider guarded live execution.

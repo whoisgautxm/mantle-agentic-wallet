@@ -8,12 +8,14 @@ import {
   type MerchantMoeQuote,
   type MerchantMoeReadOnlyAdapter,
 } from "./protocols/merchantMoeReadOnlyAdapter.js";
+import { getMerchantMoeRoutePreset, routePresetIds } from "./protocols/merchantMoeRoutePresets.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const ONE = 10n ** 18n;
 
 export interface MerchantMoeQuoteSmokeConfig {
+  routePresetId?: string;
   route: `0x${string}`[];
   amountIn: bigint;
   tokenInDecimals: number;
@@ -39,10 +41,20 @@ function asAddress(value: string, label: string): `0x${string}` {
   return trimmed as `0x${string}`;
 }
 
+function envOverride(value: string | undefined): string | undefined {
+  return value?.trim() ? value : undefined;
+}
+
 export function parseMerchantMoeQuoteSmokeConfig(env = process.env): MerchantMoeQuoteSmokeConfig {
-  const routeRaw = env.MERCHANT_MOE_ROUTE;
+  const routePresetId = env.MERCHANT_MOE_ROUTE_PRESET?.trim();
+  const preset = getMerchantMoeRoutePreset(routePresetId);
+  if (routePresetId && !preset) {
+    throw new Error(`MERCHANT_MOE_ROUTE_PRESET must be one of: ${routePresetIds().join(", ")}`);
+  }
+
+  const routeRaw = envOverride(env.MERCHANT_MOE_ROUTE) ?? preset?.route.join(",");
   if (!routeRaw?.trim()) {
-    throw new Error("MERCHANT_MOE_ROUTE is required, e.g. tokenIn,tokenOut");
+    throw new Error("MERCHANT_MOE_ROUTE or MERCHANT_MOE_ROUTE_PRESET is required, e.g. tokenIn,tokenOut");
   }
 
   const route = routeRaw
@@ -50,20 +62,30 @@ export function parseMerchantMoeQuoteSmokeConfig(env = process.env): MerchantMoe
     .map((value, index) => asAddress(value, `MERCHANT_MOE_ROUTE[${index}]`));
   if (route.length < 2) throw new Error("MERCHANT_MOE_ROUTE must include at least tokenIn,tokenOut");
 
-  const amountRaw = env.MERCHANT_MOE_AMOUNT_IN_WEI;
+  const amountRaw = envOverride(env.MERCHANT_MOE_AMOUNT_IN_WEI) ?? preset?.amountInWei.toString();
   if (!amountRaw?.trim() || !/^\d+$/.test(amountRaw.trim())) {
     throw new Error("MERCHANT_MOE_AMOUNT_IN_WEI is required as a positive integer raw token amount");
   }
   const amountIn = BigInt(amountRaw.trim());
   if (amountIn <= 0n) throw new Error("MERCHANT_MOE_AMOUNT_IN_WEI must be positive");
 
-  const tokenInDecimals = parseDecimals(env.MERCHANT_MOE_TOKEN_IN_DECIMALS ?? "18", "MERCHANT_MOE_TOKEN_IN_DECIMALS");
-  const tokenOutDecimals = parseDecimals(env.MERCHANT_MOE_TOKEN_OUT_DECIMALS ?? "18", "MERCHANT_MOE_TOKEN_OUT_DECIMALS");
-  const maxDeviationBps = parseBps(env.MERCHANT_MOE_MAX_DEVIATION_BPS ?? "300", "MERCHANT_MOE_MAX_DEVIATION_BPS");
+  const tokenInDecimals = parseDecimals(
+    envOverride(env.MERCHANT_MOE_TOKEN_IN_DECIMALS) ?? preset?.tokenInDecimals.toString() ?? "18",
+    "MERCHANT_MOE_TOKEN_IN_DECIMALS",
+  );
+  const tokenOutDecimals = parseDecimals(
+    envOverride(env.MERCHANT_MOE_TOKEN_OUT_DECIMALS) ?? preset?.tokenOutDecimals.toString() ?? "18",
+    "MERCHANT_MOE_TOKEN_OUT_DECIMALS",
+  );
+  const maxDeviationBps = parseBps(
+    envOverride(env.MERCHANT_MOE_MAX_DEVIATION_BPS) ?? preset?.maxDeviationBps.toString() ?? "300",
+    "MERCHANT_MOE_MAX_DEVIATION_BPS",
+  );
   const referencePriceWei = parseOptionalPositiveBigint(env.MERCHANT_MOE_REFERENCE_PRICE_WEI, "MERCHANT_MOE_REFERENCE_PRICE_WEI");
-  const referenceSource = parseReferenceSource(env.MERCHANT_MOE_REFERENCE_SOURCE, referencePriceWei);
+  const referenceSource = parseReferenceSource(envOverride(env.MERCHANT_MOE_REFERENCE_SOURCE) ?? preset?.referenceSource, referencePriceWei);
 
   return {
+    routePresetId: preset?.id,
     route,
     amountIn,
     tokenInDecimals,

@@ -47,8 +47,30 @@ describe("Merchant Moe quote smoke", () => {
     expect(config.referenceSource).toBe("manual");
   });
 
+  it("loads verified WMNT stable route presets", () => {
+    const config = parseMerchantMoeQuoteSmokeConfig({
+      MERCHANT_MOE_ROUTE_PRESET: "wmnt-usdc-direct",
+      MERCHANT_MOE_ROUTE: "",
+      MERCHANT_MOE_AMOUNT_IN_WEI: "",
+      MERCHANT_MOE_TOKEN_OUT_DECIMALS: "",
+      MERCHANT_MOE_REFERENCE_SOURCE: "",
+    });
+
+    expect(config.routePresetId).toBe("wmnt-usdc-direct");
+    expect(config.route).toEqual([
+      "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8",
+      "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9",
+    ]);
+    expect(config.amountIn).toBe(100000000000000000n);
+    expect(config.tokenInDecimals).toBe(18);
+    expect(config.tokenOutDecimals).toBe(6);
+    expect(config.referenceSource).toBe("pyth-mnt-usd");
+    expect(config.maxDeviationBps).toBe(500n);
+  });
+
   it("rejects missing or unsafe quote config", () => {
     expect(() => parseMerchantMoeQuoteSmokeConfig({})).toThrow(/MERCHANT_MOE_ROUTE/);
+    expect(() => parseMerchantMoeQuoteSmokeConfig({ MERCHANT_MOE_ROUTE_PRESET: "unknown" })).toThrow(/wmnt-usdc-direct/);
     expect(() =>
       parseMerchantMoeQuoteSmokeConfig({
         MERCHANT_MOE_ROUTE: tokenA,

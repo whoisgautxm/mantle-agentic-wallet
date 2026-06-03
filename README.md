@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 111 passing |
+| Agent | `cd agent && npm test` | 112 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -230,6 +230,7 @@ MERCHANT_MOE_CHAIN_ID=5000
 MERCHANT_MOE_RPC_URL=
 MERCHANT_MOE_LB_QUOTER=0x501b8AFd35df20f531fF45F6f695793AC3316c85
 MERCHANT_MOE_LB_ROUTER=0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a
+MERCHANT_MOE_ROUTE_PRESET=wmnt-usdc-direct
 MERCHANT_MOE_ROUTE=
 MERCHANT_MOE_AMOUNT_IN_WEI=
 MERCHANT_MOE_SLIPPAGE_BPS=100
@@ -243,11 +244,11 @@ MERCHANT_MOE_SIMULATION_VAULT=
 MERCHANT_MOE_SIMULATION_VALUE_WEI=0
 MERCHANT_MOE_SWAP_CALLDATA=
 MERCHANT_MOE_SIMULATION_RATIONALE=Merchant Moe mainnet-fork simulation
-MERCHANT_MOE_TOKEN_IN_DECIMALS=18
-MERCHANT_MOE_TOKEN_OUT_DECIMALS=18
-MERCHANT_MOE_REFERENCE_SOURCE=none
+MERCHANT_MOE_TOKEN_IN_DECIMALS=
+MERCHANT_MOE_TOKEN_OUT_DECIMALS=
+MERCHANT_MOE_REFERENCE_SOURCE=
 MERCHANT_MOE_REFERENCE_PRICE_WEI=
-MERCHANT_MOE_MAX_DEVIATION_BPS=300
+MERCHANT_MOE_MAX_DEVIATION_BPS=
 LENDING_PROTOCOL_ID=lendle
 LENDING_ACCOUNT=
 LENDING_POSITION_JSON=
@@ -266,6 +267,15 @@ Use testnet keys only. `.env` is gitignored.
 
 Merchant Moe settings are read-only Mantle mainnet quote settings. They are used for adapter research and route/allowance readiness, not live execution from the Sepolia demo vaults.
 
+Verified route presets:
+
+- `wmnt-usdc-direct` - conservative default, WMNT -> USDC, 18 -> 6 decimals, Pyth MNT/USD reference, 500 bps max deviation.
+- `wmnt-moe-usdc` - optional liquidity route, WMNT -> MOE -> USDC, Pyth MNT/USD reference, 500 bps max deviation.
+- `wmnt-usdt-direct` - secondary stable route, WMNT -> USDT, 18 -> 6 decimals, Pyth MNT/USD reference, 500 bps max deviation.
+- `wmnt-usde-direct` - experimental stable route, WMNT -> USDe, 18 -> 18 decimals, Pyth MNT/USD reference, 750 bps max deviation.
+
+Leave `MERCHANT_MOE_ROUTE`, amount, decimal, reference, and max-deviation fields blank to use the preset defaults. Set those fields only when intentionally overriding a preset.
+
 To smoke-test a real Merchant Moe quote without execution:
 
 ```bash
@@ -274,7 +284,7 @@ set -a && source ../.env && set +a
 npm run quote:merchant-moe
 ```
 
-The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. Optional decimal/reference settings let it report quote-vs-reference deviation. For MNT -> USD-like routes, `MERCHANT_MOE_REFERENCE_SOURCE=pyth-mnt-usd` compares the normalized token-in/token-out quote against the inverted Pyth MNT/USD feed. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
+The quote smoke requires either `MERCHANT_MOE_ROUTE_PRESET` or `MERCHANT_MOE_ROUTE` as comma-separated token addresses plus `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount when no preset is used. Optional decimal/reference settings let it report quote-vs-reference deviation. For MNT -> USD-like routes, `MERCHANT_MOE_REFERENCE_SOURCE=pyth-mnt-usd` compares the normalized token-in/token-out quote against the inverted Pyth MNT/USD feed. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
 
 To produce a fork-readiness report with slippage/min-output metadata:
 

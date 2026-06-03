@@ -100,6 +100,8 @@ Important caution: published Merchant Moe contract addresses are for Mantle main
 
 Implemented readiness step:
 
+- `MERCHANT_MOE_ROUTE_PRESET` supports verified WMNT/stable quote presets: `wmnt-usdc-direct`, `wmnt-moe-usdc`, `wmnt-usdt-direct`, and `wmnt-usde-direct`.
+- Presets include token route, decimals, default 0.1 WMNT test size, Pyth MNT/USD reference mode, and route-specific deviation thresholds.
 - `npm run readiness:merchant-moe` quotes the configured route, computes min-output from slippage, checks quote/reference deviation, reports fork RPC status, writes JSONL trace evidence, and blocks execution because calldata generation remains disabled.
 - `npm run simulate:merchant-moe-fork` adds the Phase C fork-simulation gate. It blocks until fork RPC, simulation account, and swap calldata are configured; when calldata exists, it simulates direct LBRouter or fork-local `AgentVault.execute` calls without submitting transactions.
 - The dashboard reads the latest Merchant Moe quote-smoke, fork-readiness, or fork-simulation JSONL trace event and surfaces route, output, min-output, slippage, quote-risk, simulation status, blockers, and next steps.
