@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMerchantMoeQuoteRiskReport,
   formatMerchantMoeQuote,
   parseMerchantMoeQuoteSmokeConfig,
+  quoteTokenInPerTokenOutPriceWei,
   runMerchantMoeQuoteSmoke,
 } from "./merchantMoeQuoteSmoke.js";
 import type { MerchantMoeQuote } from "./protocols/merchantMoeReadOnlyAdapter.js";
@@ -30,9 +32,15 @@ describe("Merchant Moe quote smoke", () => {
     const config = parseMerchantMoeQuoteSmokeConfig({
       MERCHANT_MOE_ROUTE: `${tokenA}, ${tokenB}`,
       MERCHANT_MOE_AMOUNT_IN_WEI: "100",
+      MERCHANT_MOE_TOKEN_IN_DECIMALS: "18",
+      MERCHANT_MOE_TOKEN_OUT_DECIMALS: "6",
+      MERCHANT_MOE_REFERENCE_PRICE_WEI: "1000000000000000000",
     });
     expect(config.route).toEqual([tokenA, tokenB]);
     expect(config.amountIn).toBe(100n);
+    expect(config.tokenInDecimals).toBe(18);
+    expect(config.tokenOutDecimals).toBe(6);
+    expect(config.referenceSource).toBe("manual");
   });
 
   it("rejects missing or unsafe quote config", () => {
@@ -49,12 +57,56 @@ describe("Merchant Moe quote smoke", () => {
         MERCHANT_MOE_AMOUNT_IN_WEI: "0",
       }),
     ).toThrow(/positive/);
+    expect(() =>
+      parseMerchantMoeQuoteSmokeConfig({
+        MERCHANT_MOE_ROUTE: `${tokenA},${tokenB}`,
+        MERCHANT_MOE_AMOUNT_IN_WEI: "100",
+        MERCHANT_MOE_MAX_DEVIATION_BPS: "10001",
+      }),
+    ).toThrow(/10000/);
+  });
+
+  it("normalizes quote price as token-in per token-out in e18 units", () => {
+    const oneMntForTwoUsdc = {
+      ...quote,
+      amountIn: 10n ** 18n,
+      amountOut: 2n * 10n ** 6n,
+    };
+    const config = parseMerchantMoeQuoteSmokeConfig({
+      MERCHANT_MOE_ROUTE: `${tokenA},${tokenB}`,
+      MERCHANT_MOE_AMOUNT_IN_WEI: (10n ** 18n).toString(),
+      MERCHANT_MOE_TOKEN_IN_DECIMALS: "18",
+      MERCHANT_MOE_TOKEN_OUT_DECIMALS: "6",
+    });
+
+    expect(quoteTokenInPerTokenOutPriceWei(oneMntForTwoUsdc, config)).toBe(5n * 10n ** 17n);
+  });
+
+  it("builds ok and blocked deviation reports", () => {
+    const config = parseMerchantMoeQuoteSmokeConfig({
+      MERCHANT_MOE_ROUTE: `${tokenA},${tokenB}`,
+      MERCHANT_MOE_AMOUNT_IN_WEI: "100",
+      MERCHANT_MOE_REFERENCE_PRICE_WEI: "1000000000000000000",
+      MERCHANT_MOE_MAX_DEVIATION_BPS: "300",
+    });
+    const okReport = buildMerchantMoeQuoteRiskReport({ ...quote, amountIn: 100n, amountOut: 100n }, config);
+    const blockedReport = buildMerchantMoeQuoteRiskReport({ ...quote, amountIn: 100n, amountOut: 50n }, config);
+
+    expect(okReport.status).toBe("ok");
+    expect(okReport.deviationBps).toBe(0n);
+    expect(blockedReport.status).toBe("blocked");
+    expect(blockedReport.deviationBps).toBe(10_000n);
   });
 
   it("formats quotes with an explicit no-execution warning", () => {
-    const output = formatMerchantMoeQuote(quote);
+    const config = parseMerchantMoeQuoteSmokeConfig({
+      MERCHANT_MOE_ROUTE: `${tokenA},${tokenB}`,
+      MERCHANT_MOE_AMOUNT_IN_WEI: "100",
+    });
+    const output = formatMerchantMoeQuote(quote, buildMerchantMoeQuoteRiskReport(quote, config));
     expect(output).toContain("amountOut: 95");
     expect(output).toContain("binSteps: 25");
+    expect(output).toContain("riskStatus: unchecked");
     expect(output).toContain("execution: disabled");
   });
 

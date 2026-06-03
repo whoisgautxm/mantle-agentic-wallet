@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-68%2F68-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-70%2F70-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 68 passing |
+| Agent | `cd agent && npm test` | 70 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -220,6 +220,11 @@ MERCHANT_MOE_LB_QUOTER=0x501b8AFd35df20f531fF45F6f695793AC3316c85
 MERCHANT_MOE_LB_ROUTER=0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a
 MERCHANT_MOE_ROUTE=
 MERCHANT_MOE_AMOUNT_IN_WEI=
+MERCHANT_MOE_TOKEN_IN_DECIMALS=18
+MERCHANT_MOE_TOKEN_OUT_DECIMALS=18
+MERCHANT_MOE_REFERENCE_SOURCE=none
+MERCHANT_MOE_REFERENCE_PRICE_WEI=
+MERCHANT_MOE_MAX_DEVIATION_BPS=300
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
@@ -238,7 +243,7 @@ set -a && source ../.env && set +a
 npm run quote:merchant-moe
 ```
 
-The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
+The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. Optional decimal/reference settings let it report quote-vs-reference deviation. For MNT -> USD-like routes, `MERCHANT_MOE_REFERENCE_SOURCE=pyth-mnt-usd` compares the normalized token-in/token-out quote against the inverted Pyth MNT/USD feed. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
 
 Merchant Moe references:
 

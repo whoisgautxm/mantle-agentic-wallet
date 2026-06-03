@@ -52,6 +52,7 @@ Current project state:
 
 - Merchant Moe read-only LBQuoter adapter exists.
 - Merchant Moe read-only quote smoke CLI exists.
+- Merchant Moe quote smoke can report quote-vs-reference deviation when decimals and a manual or Pyth reference are configured.
 - Merchant Moe execution is intentionally disabled.
 - ERC20 allowance tracking can watch the LB Router spender.
 - Protocol readiness dashboard shows read-only/execution status.
@@ -59,7 +60,7 @@ Current project state:
 Next integration:
 
 1. Add token route config for WMNT/stables or other verified Mantle pairs.
-2. Compare Merchant Moe quote output against Pyth/reference prices.
+2. Persist quote smoke outputs as structured decision/quote traces.
 3. Add slippage/min-output fields to `ExecutionPlan`.
 4. Run mainnet-fork simulation before enabling calldata generation.
 5. Only then consider guarded live execution.
