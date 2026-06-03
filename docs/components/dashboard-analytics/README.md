@@ -23,6 +23,7 @@ It reconstructs:
 - AI token value
 - baseline token value
 - AI and baseline decision feeds
+- protocol readiness for MockDEX, Merchant Moe, Pyth, simulation, and allowance tracking
 
 This should remain the foundation. New components should extend event sources and metadata, not replace the replay model.
 
@@ -75,6 +76,7 @@ Medium term:
 
 - Oracle Status: source, price, age, stale flag, DEX deviation.
 - Risk Status: current breakers, blocked decisions, risk thresholds.
+- Protocol Readiness: executable/read-only state, allowlist posture, oracle mode, simulation gate, and allowance watch.
 - Protocol Exposure: per protocol and per token values.
 - Simulation Feed: latest proposed tx, gas estimate, pass/fail.
 - Allowance Watch: spender, token, allowance, risk label.
@@ -84,6 +86,7 @@ Medium term:
 
 - Existing dashboard still works with only MockDEX events.
 - New panels gracefully show empty states when components are not enabled.
+- Protocol readiness summarizes MockDEX, Merchant Moe, Pyth, simulation, and allowance state.
 - Every explorer link is derived from chain ID and tx hash/address.
 - Dashboard avoids Alchemy log-limit failures through chunking/lookback controls.
 

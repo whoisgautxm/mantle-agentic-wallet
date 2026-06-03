@@ -287,6 +287,14 @@ cd web && npm run dev
 
 Open `http://localhost:3000`. The dashboard auto-refreshes every 15 seconds.
 
+The dashboard now includes protocol readiness alongside the replay:
+
+- MockDEX executable status and vault allowlist posture
+- Merchant Moe read-only adapter readiness
+- Pyth oracle active/standby/fallback state
+- execution simulation gate status
+- ERC20 portfolio and allowance watch configuration
+
 ---
 
 ## Why It Can Win

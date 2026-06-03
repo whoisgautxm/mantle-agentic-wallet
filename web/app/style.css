@@ -196,6 +196,37 @@ h2 {
   margin-top: 10px;
 }
 
+.protocol-list {
+  display: grid;
+  gap: 10px;
+}
+
+.protocol-row {
+  display: grid;
+  grid-template-columns: 1.05fr 0.8fr 0.7fr minmax(220px, 1.3fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 18px;
+  background: rgba(10, 8, 5, 0.34);
+  padding: 14px;
+}
+
+.protocol-row span,
+.protocol-row p {
+  color: var(--muted);
+}
+
+.protocol-row strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.protocol-row p {
+  margin: 0;
+  line-height: 1.45;
+}
+
 .portfolio-table {
   display: grid;
   gap: 8px;
@@ -348,6 +379,7 @@ h2 {
 
   .metric-grid,
   .risk-row,
+  .protocol-row,
   .table-head,
   .table-row {
     grid-template-columns: 1fr;
