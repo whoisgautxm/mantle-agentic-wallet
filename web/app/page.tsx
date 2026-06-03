@@ -2,6 +2,7 @@ import { getDecisions, getPriceHistory, getTrades } from "../lib/events";
 import { buildSeries, currentStanding } from "../lib/pnl";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
+import LendingReadinessPanel from "./components/LendingReadinessPanel";
 import OraclePanel from "./components/OraclePanel";
 import PortfolioPanel from "./components/PortfolioPanel";
 import ProtocolEvidencePanel from "./components/ProtocolEvidencePanel";
@@ -10,6 +11,7 @@ import RiskPanel from "./components/RiskPanel";
 import EvalReadinessPanel from "./components/EvalReadinessPanel";
 import addresses from "../../shared/addresses.json";
 import { getEvalReadiness } from "../lib/evalReadiness";
+import { getLendingEvidence } from "../lib/lendingEvidence";
 import { getPortfolioStatus } from "../lib/portfolio";
 import { getProtocolEvidence } from "../lib/protocolEvidence";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
@@ -65,6 +67,7 @@ export default async function Page() {
   ]);
   const protocolReadiness = getProtocolReadiness(liveStatus, portfolioStatus);
   const protocolEvidence = await getProtocolEvidence();
+  const lendingEvidence = await getLendingEvidence();
   const evalReadiness = await getEvalReadiness();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const standing = currentStanding(series);
@@ -127,6 +130,10 @@ export default async function Page() {
 
       <section className="insights single">
         <PortfolioPanel status={portfolioStatus} />
+      </section>
+
+      <section className="insights single">
+        <LendingReadinessPanel evidence={lendingEvidence} />
       </section>
 
       <section className="insights single">

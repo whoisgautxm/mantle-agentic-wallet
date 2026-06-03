@@ -13,6 +13,7 @@
     "demo:stop": "tsx src/demoStop.ts",
     "quote:merchant-moe": "tsx src/merchantMoeQuoteSmoke.ts",
     "readiness:merchant-moe": "tsx src/merchantMoeForkReadiness.ts",
+    "readiness:lending": "tsx src/lendingReadiness.ts",
     "eval:traces": "tsx src/traceEval.ts",
     "eval:scenarios": "tsx src/scenarioEval.ts"
   },

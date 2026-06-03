@@ -75,6 +75,12 @@ Start read-only:
 
 Then add execution only for supply/withdraw. Borrow/repay should wait until health-factor risk tests are mature.
 
+Implemented v1 read-only readiness:
+
+- `agent/src/protocols/lending/health.ts` computes supplied value, debt value, weighted liquidation threshold, health factor, and liquidation buffer.
+- `npm run readiness:lending` reads local `LENDING_POSITION_JSON` and `LENDING_MARKETS_JSON` snapshots, reports warnings/blockers, writes `lending.readiness` JSONL trace evidence, and keeps lending execution disabled.
+- The dashboard reads the latest `lending.readiness` trace event and surfaces health factor, liquidation buffer, market/cap warnings, blockers, and next steps.
+
 ## Risk Rules Needed First
 
 - minimum health factor
@@ -99,11 +105,11 @@ Add:
 
 ## Acceptance Criteria
 
-- Read-only market and position display works before execution.
+- Read-only market and position display works before execution. Implemented for local readiness snapshots and dashboard trace evidence.
 - Risk engine blocks unsafe borrow/withdraw.
 - Simulation passes before any supply/withdraw.
-- Dashboard explains health factor and liquidation risk.
-- No borrow execution is enabled until tests cover liquidation edge cases.
+- Dashboard explains health factor and liquidation risk. Implemented for readiness trace reports.
+- No borrow execution is enabled until tests cover liquidation edge cases. Current lending readiness is explicitly read-only.
 
 ## Resources
 

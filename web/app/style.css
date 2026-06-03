@@ -348,6 +348,10 @@ h2 {
   border-left-color: rgba(216, 164, 71, 0.72);
 }
 
+.lending-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .portfolio-table {
   display: grid;
   gap: 8px;

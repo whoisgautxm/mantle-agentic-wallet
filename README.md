@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 100 passing |
+| Agent | `cd agent && npm test` | 107 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -242,6 +242,14 @@ MERCHANT_MOE_TOKEN_OUT_DECIMALS=18
 MERCHANT_MOE_REFERENCE_SOURCE=none
 MERCHANT_MOE_REFERENCE_PRICE_WEI=
 MERCHANT_MOE_MAX_DEVIATION_BPS=300
+LENDING_PROTOCOL_ID=lendle
+LENDING_ACCOUNT=
+LENDING_POSITION_JSON=
+LENDING_MARKETS_JSON=
+LENDING_MIN_HEALTH_FACTOR_BPS=15000
+LENDING_WARN_HEALTH_FACTOR_BPS=18000
+LENDING_MAX_MARKET_UTILIZATION_BPS=9000
+LENDING_MAX_CAP_USAGE_BPS=9500
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
@@ -272,9 +280,28 @@ npm run readiness:merchant-moe
 
 The readiness report computes `minOutWei` from `MERCHANT_MOE_SLIPPAGE_BPS`, checks the quote/reference deviation, records whether a fork RPC is configured, and still blocks execution because Merchant Moe calldata generation is intentionally disabled until fork tests are added.
 
+Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
+
+Example local health snapshot:
+
+```bash
+LENDING_POSITION_JSON='{"protocolId":"lendle","account":"0x1111111111111111111111111111111111111111","assets":[{"symbol":"USDC","suppliedValueWei":"1000000000000000000000","debtValueWei":"250000000000000000000","liquidationThresholdBps":"8000"}]}'
+LENDING_MARKETS_JSON='[{"marketId":"usdc","symbol":"USDC","utilizationBps":"8500","supplyCapUsedBps":"7000"}]'
+```
+
+To produce a lending health-readiness report:
+
+```bash
+cd agent
+set -a && source ../.env && set +a
+npm run readiness:lending
+```
+
+The command computes supplied/debt value, weighted liquidation threshold, health factor, liquidation buffer, utilization/cap warnings, and hard health-factor blockers. It writes `lending.readiness` to the JSONL trace and never builds or submits lending calldata.
+
 ### Local JSONL Traces
 
-Agent, baseline, and Merchant Moe quote-smoke runs write replayable JSONL events by default to `agent/traces/agent-events.jsonl` when commands are run from `agent/`. These traces include observations, quotes, oracle snapshots, decisions, simulation results, risk results, final actions, and quote-smoke risk reports. They are gitignored and contain no private keys.
+Agent, baseline, Merchant Moe, and lending-readiness runs write replayable JSONL events by default to `agent/traces/agent-events.jsonl` when commands are run from `agent/`. These traces include observations, quotes, oracle snapshots, decisions, simulation results, risk results, final actions, quote-smoke risk reports, and lending health reports. They are gitignored and contain no private keys.
 
 Set `TRACE_ENABLED=false` to disable tracing, or set `TRACE_JSONL_PATH=/path/to/file.jsonl` to choose an explicit output file.
 
@@ -306,7 +333,7 @@ npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
 
 If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
-The dashboard also reads the latest `merchant_moe.quote_smoke` or `merchant_moe.fork_readiness` event from the JSONL trace and shows route, amount, min-output, slippage, quote-risk, fork-RPC, blocker, and next-step evidence in the real DEX evidence panel.
+The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels.
 
 Merchant Moe references:
 
@@ -403,6 +430,7 @@ The dashboard now includes protocol readiness alongside the replay:
 - MockDEX executable status and vault allowlist posture
 - Merchant Moe read-only adapter readiness
 - Merchant Moe quote/fork-readiness evidence from JSONL traces
+- Lendle/INIT-style lending health-factor evidence from JSONL traces
 - Pyth oracle active/standby/fallback state
 - execution simulation gate status
 - ERC20 portfolio and allowance watch configuration

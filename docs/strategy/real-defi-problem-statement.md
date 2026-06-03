@@ -106,6 +106,13 @@ Primary risk questions:
 
 Lendle is a Mantle-native non-custodial lending market. Lending creates more realistic DeFi problems than swapping because the agent must reason about deposits, borrow rates, health factor, liquidation, and collateral.
 
+Current project state:
+
+- Lending health-factor evaluator exists for read-only local snapshots.
+- Lending readiness CLI writes `lending.readiness` JSONL trace evidence.
+- Dashboard surfaces supplied value, debt value, weighted liquidation threshold, health factor, liquidation buffer, blockers, and next steps.
+- Lending execution is intentionally disabled.
+
 Best fit for this project:
 
 - Start read-only.
