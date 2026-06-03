@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-43%2F43-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-47%2F47-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -171,7 +171,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 43 passing |
+| Agent | `cd agent && npm test` | 47 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -198,12 +198,23 @@ RISK_MAX_DEX_ORACLE_DEVIATION_BPS=300
 RISK_MAX_POSITION_BPS=7000
 RISK_MAX_TRADE_VALUE_BPS=2500
 PORTFOLIO_TOKENS=
-PORTFOLIO_SPENDERS=
+PORTFOLIO_SPENDERS=MerchantMoeLBRouter:0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a:known
+MERCHANT_MOE_CHAIN_ID=5000
+MERCHANT_MOE_RPC_URL=
+MERCHANT_MOE_LB_QUOTER=0x501b8AFd35df20f531fF45F6f695793AC3316c85
+MERCHANT_MOE_LB_ROUTER=0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
 
 Use testnet keys only. `.env` is gitignored.
+
+Merchant Moe settings are read-only Mantle mainnet quote settings. They are used for adapter research and route/allowance readiness, not live execution from the Sepolia demo vaults.
+
+Merchant Moe references:
+
+- Merchant Moe contract addresses: https://docs.merchantmoe.com/resources/contracts
+- LFJ LBQuoter docs: https://developers.lfj.gg/contracts/lbquoter
 
 ---
 
