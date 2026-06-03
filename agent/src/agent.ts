@@ -7,6 +7,7 @@ import { createMockDexOracleRouter } from "./oracles/router.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { evaluateRisk } from "./risk/engine.js";
+import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
 import { sendAlert } from "./telegram.js";
 
@@ -24,6 +25,7 @@ function createReasoningClient(): ReasoningClient {
 const client = createReasoningClient();
 const protocol = createMockDexAdapter(dexAddress, readPrice);
 const oracleRouter = createMockDexOracleRouter(readPrice);
+const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
@@ -78,7 +80,9 @@ async function tick(context: string): Promise<void> {
     allowedTargets: [protocol.target],
     allowedSelectors: protocol.allowedSelectors,
     oracle,
+    quotePriceWei: state.priceWei,
     simulation,
+    limits: riskLimits,
   });
   if (!risk.ok) {
     console.log("[guard] blocked:", risk.reason);

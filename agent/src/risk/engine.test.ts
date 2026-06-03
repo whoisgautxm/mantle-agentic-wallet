@@ -37,6 +37,16 @@ const buy: Decision = {
   rationale: "test buy",
 };
 
+const richState: VaultState = {
+  ...state,
+  balanceWei: 10n * 10n ** 18n,
+  spendLimitPerTx: 10n * 10n ** 18n,
+  dailyLimit: 10n * 10n ** 18n,
+  spentToday: 0n,
+  tokenBalanceWei: 1n * 10n ** 18n,
+  priceWei: 2n * 10n ** 18n,
+};
+
 describe("evaluateRisk", () => {
   it("allows a safe simulated adapter execution", () => {
     const result = evaluateRisk({
@@ -103,5 +113,90 @@ describe("evaluateRisk", () => {
       expect(result.ruleId).toBe("SIMULATION_FAILED");
       expect(result.reason).toBe("paused");
     }
+  });
+
+  it("blocks DEX quotes that deviate too far from the reference oracle", () => {
+    const result = evaluateRisk({
+      decision: buy,
+      state,
+      allowedTargets: [target],
+      allowedSelectors: [buySelector],
+      oracle,
+      quotePriceWei: 2_800n,
+      simulation: { ok: true },
+      limits: {
+        maxDexOracleDeviationBps: 300n,
+        maxPositionBps: 10_000n,
+        maxTradeValueBps: 10_000n,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.ruleId).toBe("DEX_ORACLE_DEVIATION");
+  });
+
+  it("blocks projected token exposure above the configured position limit", () => {
+    const result = evaluateRisk({
+      decision: {
+        ...buy,
+        valueWei: 8n * 10n ** 18n,
+      },
+      state: richState,
+      allowedTargets: [target],
+      allowedSelectors: [buySelector],
+      oracle: { ...oracle, priceWei: richState.priceWei },
+      quotePriceWei: richState.priceWei,
+      simulation: { ok: true },
+      limits: {
+        maxDexOracleDeviationBps: 300n,
+        maxPositionBps: 5_000n,
+        maxTradeValueBps: 10_000n,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.ruleId).toBe("MAX_POSITION_SIZE");
+  });
+
+  it("blocks single trades above the configured portfolio-value limit", () => {
+    const result = evaluateRisk({
+      decision: {
+        ...buy,
+        valueWei: 4n * 10n ** 18n,
+      },
+      state: richState,
+      allowedTargets: [target],
+      allowedSelectors: [buySelector],
+      oracle: { ...oracle, priceWei: richState.priceWei },
+      quotePriceWei: richState.priceWei,
+      simulation: { ok: true },
+      limits: {
+        maxDexOracleDeviationBps: 300n,
+        maxPositionBps: 10_000n,
+        maxTradeValueBps: 2_000n,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.ruleId).toBe("MAX_TRADE_VALUE");
+  });
+
+  it("warns when projected exposure approaches the configured position limit", () => {
+    const result = evaluateRisk({
+      decision: {
+        ...buy,
+        valueWei: 3n * 10n ** 18n,
+      },
+      state: richState,
+      allowedTargets: [target],
+      allowedSelectors: [buySelector],
+      oracle: { ...oracle, priceWei: richState.priceWei },
+      quotePriceWei: richState.priceWei,
+      simulation: { ok: true },
+      limits: {
+        maxDexOracleDeviationBps: 300n,
+        maxPositionBps: 5_000n,
+        maxTradeValueBps: 10_000n,
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.warnings.map((w) => w.ruleId)).toContain("POSITION_SIZE_WARNING");
   });
 });

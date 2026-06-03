@@ -1,6 +1,7 @@
 import type { PriceSnapshot } from "../oracles/types.js";
 import type { SimulationResult } from "../simulation/types.js";
 import type { Decision, VaultState } from "../types.js";
+import type { RiskLimits } from "./limits.js";
 
 export interface RiskInput {
   decision: Decision;
@@ -9,7 +10,9 @@ export interface RiskInput {
   allowedTargets?: readonly `0x${string}`[];
   allowedSelectors?: readonly `0x${string}`[];
   oracle?: PriceSnapshot;
+  quotePriceWei?: bigint;
   simulation?: SimulationResult;
+  limits?: RiskLimits;
 }
 
 export interface RiskWarning {

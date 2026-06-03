@@ -5,11 +5,13 @@ import { createMockDexOracleRouter } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { planToDecision } from "./protocols/types.js";
 import { evaluateRisk } from "./risk/engine.js";
+import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
 
 const DCA_MNT = "0.005";
 const protocol = createMockDexAdapter(dexAddress, readPrice);
 const oracleRouter = createMockDexOracleRouter(readPrice);
+const riskLimits = loadRiskLimitsFromEnv();
 
 async function tick(): Promise<void> {
   const state = await readVaultState(baselineVaultAddress);
@@ -40,7 +42,9 @@ async function tick(): Promise<void> {
     allowedTargets: [protocol.target],
     allowedSelectors: protocol.allowedSelectors,
     oracle,
+    quotePriceWei: quote.priceWei,
     simulation,
+    limits: riskLimits,
   });
   if (!risk.ok) {
     console.log("[baseline] blocked:", risk.reason);
