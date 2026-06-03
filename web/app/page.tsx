@@ -2,7 +2,10 @@ import { getDecisions, getPriceHistory, getTrades } from "../lib/events";
 import { buildSeries, currentStanding } from "../lib/pnl";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
+import OraclePanel from "./components/OraclePanel";
+import RiskPanel from "./components/RiskPanel";
 import addresses from "../../shared/addresses.json";
+import { getLiveStatus } from "../lib/status";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,6 +34,7 @@ export default async function Page() {
   const baselineDecisions = await getDecisions(baselineVault);
   const prices = await getPriceHistory();
   const trades = await getTrades();
+  const liveStatus = await getLiveStatus();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const standing = currentStanding(series);
 
@@ -75,6 +79,11 @@ export default async function Page() {
           <strong>{trades.length} trades</strong>
           <span>{prices.length} price points</span>
         </div>
+      </section>
+
+      <section className="insights">
+        <OraclePanel status={liveStatus} />
+        <RiskPanel status={liveStatus} />
       </section>
 
       <section className="chart-card">

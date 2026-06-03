@@ -80,12 +80,116 @@ h2 {
 .status-card,
 .chart-card,
 .feed-card,
+.insight-card,
 .stats > div {
   border: 1px solid var(--line);
   border-radius: 28px;
   background: var(--panel);
   box-shadow: 0 24px 90px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px);
+}
+
+.insights {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.45fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.insight-card {
+  padding: 20px;
+}
+
+.insight-card h2 {
+  font-size: clamp(1.55rem, 3vw, 2.3rem);
+}
+
+.section-head.compact {
+  margin-bottom: 14px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-grid > div,
+.risk-row,
+.limit-strip {
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 18px;
+  background: rgba(10, 8, 5, 0.34);
+}
+
+.metric-grid > div {
+  padding: 14px;
+}
+
+.metric-grid span,
+.risk-row span,
+.limit-strip {
+  color: var(--muted);
+}
+
+.metric-grid strong,
+.risk-row strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.panel-note {
+  margin: 14px 0 0;
+  line-height: 1.5;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.badge.ok {
+  border: 1px solid rgba(85, 208, 138, 0.42);
+  color: var(--green);
+  background: rgba(85, 208, 138, 0.08);
+}
+
+.badge.warn {
+  border: 1px solid rgba(216, 164, 71, 0.45);
+  color: var(--gold);
+  background: rgba(216, 164, 71, 0.08);
+}
+
+.badge.bad {
+  border: 1px solid rgba(255, 118, 118, 0.42);
+  color: #ff8c8c;
+  background: rgba(255, 118, 118, 0.08);
+}
+
+.limit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-family: "Courier New", monospace;
+  font-size: 0.82rem;
+}
+
+.risk-row {
+  display: grid;
+  grid-template-columns: 1.25fr repeat(3, minmax(100px, 0.8fr)) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  margin-top: 10px;
 }
 
 .status-card {
@@ -196,7 +300,13 @@ h2 {
 
   .hero,
   .feeds,
+  .insights,
   .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-grid,
+  .risk-row {
     grid-template-columns: 1fr;
   }
 
