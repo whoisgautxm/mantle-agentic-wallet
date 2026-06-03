@@ -101,6 +101,7 @@ Important caution: published Merchant Moe contract addresses are for Mantle main
 Implemented readiness step:
 
 - `npm run readiness:merchant-moe` quotes the configured route, computes min-output from slippage, checks quote/reference deviation, reports fork RPC status, writes JSONL trace evidence, and blocks execution because calldata generation remains disabled.
+- The dashboard reads the latest Merchant Moe quote-smoke or fork-readiness JSONL trace event and surfaces route, output, min-output, slippage, quote-risk, blockers, and next steps.
 
 ## Dashboard Implications
 
@@ -113,6 +114,11 @@ Show:
 - slippage tolerance
 - quote source
 - tx target and function selector
+
+Implemented dashboard evidence:
+
+- Merchant Moe trace card for read-only quote and fork-readiness reports.
+- Real DEX blocker/next-step feed so demo viewers can see why execution remains disabled.
 
 ## Acceptance Criteria
 

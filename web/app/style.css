@@ -321,6 +321,33 @@ h2 {
   font-size: 0.78rem;
 }
 
+.protocol-evidence-grid {
+  grid-template-columns: 1fr;
+}
+
+.evidence-route {
+  border: 1px solid rgba(85, 208, 138, 0.18);
+  border-radius: 16px;
+  background: rgba(85, 208, 138, 0.06);
+  padding: 12px;
+  font-family: "Courier New", monospace;
+}
+
+.evidence-route span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.evidence-route strong {
+  overflow-wrap: anywhere;
+}
+
+.evidence-steps span {
+  border-left-color: rgba(216, 164, 71, 0.72);
+}
+
 .portfolio-table {
   display: grid;
   gap: 8px;

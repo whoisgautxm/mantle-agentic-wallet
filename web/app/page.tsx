@@ -4,12 +4,14 @@ import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
 import OraclePanel from "./components/OraclePanel";
 import PortfolioPanel from "./components/PortfolioPanel";
+import ProtocolEvidencePanel from "./components/ProtocolEvidencePanel";
 import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
 import EvalReadinessPanel from "./components/EvalReadinessPanel";
 import addresses from "../../shared/addresses.json";
 import { getEvalReadiness } from "../lib/evalReadiness";
 import { getPortfolioStatus } from "../lib/portfolio";
+import { getProtocolEvidence } from "../lib/protocolEvidence";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
 import { getLiveStatus } from "../lib/status";
 
@@ -62,6 +64,7 @@ export default async function Page() {
     { name: "Baseline", address: baselineVault },
   ]);
   const protocolReadiness = getProtocolReadiness(liveStatus, portfolioStatus);
+  const protocolEvidence = await getProtocolEvidence();
   const evalReadiness = await getEvalReadiness();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const standing = currentStanding(series);
@@ -116,6 +119,10 @@ export default async function Page() {
 
       <section className="insights single">
         <ProtocolReadinessPanel readiness={protocolReadiness} />
+      </section>
+
+      <section className="insights single">
+        <ProtocolEvidencePanel evidence={protocolEvidence} />
       </section>
 
       <section className="insights single">

@@ -306,6 +306,8 @@ npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
 
 If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
+The dashboard also reads the latest `merchant_moe.quote_smoke` or `merchant_moe.fork_readiness` event from the JSONL trace and shows route, amount, min-output, slippage, quote-risk, fork-RPC, blocker, and next-step evidence in the real DEX evidence panel.
+
 Merchant Moe references:
 
 - Merchant Moe contract addresses: https://docs.merchantmoe.com/resources/contracts
@@ -400,6 +402,7 @@ The dashboard now includes protocol readiness alongside the replay:
 
 - MockDEX executable status and vault allowlist posture
 - Merchant Moe read-only adapter readiness
+- Merchant Moe quote/fork-readiness evidence from JSONL traces
 - Pyth oracle active/standby/fallback state
 - execution simulation gate status
 - ERC20 portfolio and allowance watch configuration
