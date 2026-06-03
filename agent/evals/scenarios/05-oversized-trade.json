@@ -1,0 +1,40 @@
+{
+  "name": "oversized-trade-block",
+  "description": "A buy that exceeds max trade value as a percentage of portfolio must be blocked.",
+  "target": "0x1111111111111111111111111111111111111111",
+  "state": {
+    "balanceWei": "10000000000000000000",
+    "spendLimitPerTx": "10000000000000000000",
+    "dailyLimit": "10000000000000000000",
+    "spentToday": "0",
+    "windowStart": "1",
+    "paused": false,
+    "tokenBalanceWei": "0",
+    "priceWei": "2000000000000000000"
+  },
+  "decision": {
+    "kind": "buy",
+    "valueWei": "5000000000000000000",
+    "rationale": "oversized portfolio trade"
+  },
+  "oracle": {
+    "pair": "MNT/MOCK",
+    "priceWei": "2000000000000000000",
+    "source": "mockdex",
+    "updatedAt": "1",
+    "stale": false,
+    "maxAgeSeconds": "300"
+  },
+  "simulation": {
+    "ok": true
+  },
+  "limits": {
+    "maxDexOracleDeviationBps": "300",
+    "maxPositionBps": "7000",
+    "maxTradeValueBps": "2500"
+  },
+  "expected": {
+    "ok": false,
+    "ruleId": "MAX_TRADE_VALUE"
+  }
+}

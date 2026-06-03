@@ -8,7 +8,8 @@
     "keeper": "tsx src/keeper.ts",
     "baseline": "tsx src/baseline.ts",
     "quote:merchant-moe": "tsx src/merchantMoeQuoteSmoke.ts",
-    "eval:traces": "tsx src/traceEval.ts"
+    "eval:traces": "tsx src/traceEval.ts",
+    "eval:scenarios": "tsx src/scenarioEval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

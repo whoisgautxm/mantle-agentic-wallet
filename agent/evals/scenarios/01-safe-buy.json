@@ -1,0 +1,39 @@
+{
+  "name": "safe-buy",
+  "description": "A small buy with fresh oracle, passing simulation, and all local guards open should pass risk.",
+  "target": "0x1111111111111111111111111111111111111111",
+  "state": {
+    "balanceWei": "10000000000000000000",
+    "spendLimitPerTx": "1000000000000000000",
+    "dailyLimit": "2000000000000000000",
+    "spentToday": "0",
+    "windowStart": "1",
+    "paused": false,
+    "tokenBalanceWei": "0",
+    "priceWei": "2000000000000000000"
+  },
+  "decision": {
+    "kind": "buy",
+    "valueWei": "100000000000000000",
+    "rationale": "small controlled dip buy"
+  },
+  "oracle": {
+    "pair": "MNT/MOCK",
+    "priceWei": "2000000000000000000",
+    "source": "mockdex",
+    "updatedAt": "1",
+    "stale": false,
+    "maxAgeSeconds": "300"
+  },
+  "simulation": {
+    "ok": true
+  },
+  "limits": {
+    "maxDexOracleDeviationBps": "300",
+    "maxPositionBps": "7000",
+    "maxTradeValueBps": "2500"
+  },
+  "expected": {
+    "ok": true
+  }
+}

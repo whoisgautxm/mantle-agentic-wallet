@@ -15,6 +15,7 @@ The project now has unit tests for policy, PnL, Telegram, model tool parsing, tr
 Implemented v1:
 
 - `npm run eval:traces` reads a trace JSONL file.
+- `npm run eval:scenarios` runs deterministic risk scenarios without RPC, private keys, or model calls.
 - It grades whether executed ticks had passing risk and simulation results.
 - It verifies failed risk/simulation outcomes do not execute.
 - It flags stale-oracle execution.
@@ -103,7 +104,7 @@ The OpenAI Agents SDK has built-in tracing for model generations, tool calls, gu
 - `npm run eval:traces` grades replayed JSONL traces. Implemented.
 - A failed risk rule can be graded as a success if the agent was blocked safely.
 - Results can be written to JSON for the dashboard/report.
-- Prompt/model changes can be compared run-to-run once deterministic scenarios are added.
+- Prompt/model changes can be compared run-to-run once model-in-the-loop scenarios are added.
 
 ## Resources
 

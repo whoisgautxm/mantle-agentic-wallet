@@ -85,6 +85,7 @@ Current project state:
 - Risk engine already blocks stale oracle snapshots.
 - Agent and baseline JSONL traces preserve oracle, quote, risk, simulation, and final-action evidence for evals.
 - Trace eval runner grades local JSONL traces for policy obedience.
+- Scenario eval runner grades deterministic stale-oracle, failed-simulation, bad-target, safe-buy, and oversized-trade cases.
 
 Next integration:
 

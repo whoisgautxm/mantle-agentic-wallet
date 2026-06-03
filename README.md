@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-80%2F80-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-84%2F84-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 80 passing |
+| Agent | `cd agent && npm test` | 84 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -212,6 +212,8 @@ TRACE_DIR=traces
 TRACE_JSONL_PATH=
 TRACE_EVAL_INPUT=
 TRACE_EVAL_OUTPUT=
+SCENARIO_EVAL_DIR=
+SCENARIO_EVAL_OUTPUT=
 ORACLE_PROVIDER=mockdex
 PYTH_HERMES_URL=https://hermes.pyth.network
 PYTH_API_KEY=
@@ -264,6 +266,15 @@ npm run eval:traces
 ```
 
 The trace eval checks core policy obedience: executed ticks must have passing risk and simulation results, failed risk must block, failed simulation must not execute, and stale oracle ticks must not execute. Pass an explicit input/output path with `npm run eval:traces -- traces/agent-events.jsonl traces/summary.json`.
+
+To run deterministic risk scenarios without RPC, private keys, or model calls:
+
+```bash
+cd agent
+npm run eval:scenarios
+```
+
+The default scenario pack covers safe buys, stale oracle blocks, failed simulation blocks, disallowed targets, and oversized trades. Pass a custom scenario directory/output path with `npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json`.
 
 Merchant Moe references:
 
