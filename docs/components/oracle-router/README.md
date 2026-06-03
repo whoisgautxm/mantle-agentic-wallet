@@ -10,7 +10,14 @@ Replace the current keeper-only price model with a layered oracle router that ca
 
 ## Current Project Fit
 
-Today:
+Implemented v1:
+
+- `ORACLE_PROVIDER=mockdex` keeps the existing deterministic demo path.
+- `ORACLE_PROVIDER=pyth` fetches read-only Pyth Hermes MNT/USD updates for agent risk checks and dashboard status.
+- Pyth MNT/USD is inverted into the MNT-per-USD-style reference used by the current MockDEX demo.
+- MockDEX remains the fallback if Hermes is unavailable.
+
+Still true for the local market simulator:
 
 - `keeper.ts` calls `MockDEX.setPrice`.
 - `readPrice()` reads `MockDEX.price`.
@@ -69,7 +76,7 @@ Pyth uses a pull model on EVM. The docs explain that callers fetch price update 
 
 Best integration path:
 
-- Start with off-chain Pyth Hermes price reads for agent/risk context.
+- Start with off-chain Pyth Hermes price reads for agent/risk context. Implemented in `agent/src/oracles/pythHermes.ts`.
 - Later add on-chain Pyth update support only for flows that require price inside Solidity.
 - Store `maxAgeSeconds` per feed.
 - Fail closed when stale.
@@ -99,11 +106,11 @@ Add an Oracle Status card:
 
 ## Acceptance Criteria
 
-- `readPrice()` can be replaced by `oracleRouter.getPrice(pair)`.
+- `readPrice()` can be replaced by `oracleRouter.getPrice(pair)`. Implemented for AI and baseline runners.
 - MockDEX still works as a local/testnet source.
 - Risk engine blocks stale oracle snapshots.
-- Dashboard displays price source and freshness.
-- Tests cover stale, missing, divergent, and fresh oracle cases.
+- Dashboard displays price source, freshness, confidence, and fallback warnings.
+- Tests cover stale, missing, fallback, and fresh oracle cases.
 
 ## Resources
 

@@ -18,7 +18,7 @@ export default function OraclePanel({ status }: { status: StatusResult }) {
           <p className="eyebrow">Oracle status</p>
           <h2>{status.oracle.pair}</h2>
         </div>
-        <span className="badge ok">Fresh</span>
+        <span className={`badge ${status.oracle.stale ? "warn" : "ok"}`}>{status.oracle.stale ? "Stale" : "Fresh"}</span>
       </div>
       <div className="metric-grid">
         <div>
@@ -29,6 +29,12 @@ export default function OraclePanel({ status }: { status: StatusResult }) {
           <span>Reference price</span>
           <strong>{formatMnt(status.oracle.priceWei)}</strong>
         </div>
+        {status.oracle.confidenceWei !== undefined ? (
+          <div>
+            <span>Confidence</span>
+            <strong>{formatMnt(status.oracle.confidenceWei)}</strong>
+          </div>
+        ) : null}
         <div>
           <span>DEX deviation</span>
           <strong>{status.oracle.dexOracleDeviationBps.toString()} bps</strong>
@@ -39,8 +45,11 @@ export default function OraclePanel({ status }: { status: StatusResult }) {
         </div>
       </div>
       <p className="muted panel-note">
-        Current source is the MockDEX reference price. This panel is ready for Pyth/Chainlink freshness and deviation checks next.
+        {status.oracle.source === "Pyth"
+          ? "Pyth MNT/USD is normalized into the MNT-per-USD-style reference used by the MockDEX demo."
+          : "Current source is the MockDEX reference price. Set ORACLE_PROVIDER=pyth to use Pyth Hermes read-only checks."}
       </p>
+      {status.oracle.warnings.length ? <p className="muted panel-note">{status.oracle.warnings.join(" ")}</p> : null}
     </section>
   );
 }

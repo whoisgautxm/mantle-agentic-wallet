@@ -1,7 +1,7 @@
 import { parseEther } from "viem";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { chain, baselineVaultAddress, dexAddress, getBaselineWalletClient } from "./config.js";
-import { createMockDexOracleRouter } from "./oracles/router.js";
+import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
 import { planToDecision } from "./protocols/types.js";
@@ -12,7 +12,7 @@ import { simulateExecute } from "./simulation/simulator.js";
 const DCA_MNT = "0.005";
 const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
-const oracleRouter = createMockDexOracleRouter(readPrice);
+const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 
 async function tick(): Promise<void> {
@@ -36,6 +36,7 @@ async function tick(): Promise<void> {
   }
 
   const oracle = await oracleRouter.getPrice("MNT/MOCK");
+  if (oracle.warnings?.length) console.warn("[baseline oracle]", oracle.warnings.join("; "));
   const baselineClient = getBaselineWalletClient();
   const simulation = await simulateExecute(baselineVaultAddress, decision, baselineClient.account.address);
   const risk = evaluateRisk({

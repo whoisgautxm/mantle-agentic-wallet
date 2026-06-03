@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-56%2F56-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-64%2F64-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -173,7 +173,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 56 passing |
+| Agent | `cd agent && npm test` | 64 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -199,6 +199,11 @@ KEEPER_INTERVAL_MS=45000
 RISK_MAX_DEX_ORACLE_DEVIATION_BPS=300
 RISK_MAX_POSITION_BPS=7000
 RISK_MAX_TRADE_VALUE_BPS=2500
+ORACLE_PROVIDER=mockdex
+PYTH_HERMES_URL=https://hermes.pyth.network
+PYTH_API_KEY=
+PYTH_MNT_USD_PRICE_ID=0x4e3037c822d852d79af3ac80e35eb420ee3b870dca49f9344a38ef4773fb0585
+PYTH_MAX_AGE_SECONDS=120
 PORTFOLIO_TOKENS=
 PORTFOLIO_SPENDERS=MerchantMoeLBRouter:0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a:known
 MERCHANT_MOE_CHAIN_ID=5000
@@ -211,12 +216,16 @@ TELEGRAM_CHAT_ID=
 
 Use testnet keys only. `.env` is gitignored.
 
+`ORACLE_PROVIDER=mockdex` keeps the current Sepolia demo deterministic. `ORACLE_PROVIDER=pyth` switches the agent and dashboard to a read-only Pyth Hermes MNT/USD reference with MockDEX fallback if Hermes is unavailable. The Pyth MNT/USD feed is inverted into a MNT-per-USD-style reference so it can be compared against the current MockDEX demo price.
+
 Merchant Moe settings are read-only Mantle mainnet quote settings. They are used for adapter research and route/allowance readiness, not live execution from the Sepolia demo vaults.
 
 Merchant Moe references:
 
 - Merchant Moe contract addresses: https://docs.merchantmoe.com/resources/contracts
 - LFJ LBQuoter docs: https://developers.lfj.gg/contracts/lbquoter
+- Pyth Hermes price updates: https://docs.pyth.network/price-feeds/core/fetch-price-updates
+- Pyth price feed IDs: https://docs.pyth.network/price-feeds/core/price-feeds/price-feed-ids
 
 ---
 

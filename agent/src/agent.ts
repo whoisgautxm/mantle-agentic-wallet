@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { chain, aiVaultAddress, dexAddress, agentAccount } from "./config.js";
-import { createMockDexOracleRouter } from "./oracles/router.js";
+import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
@@ -26,7 +26,7 @@ function createReasoningClient(): ReasoningClient {
 const client = createReasoningClient();
 const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
-const oracleRouter = createMockDexOracleRouter(readPrice);
+const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
@@ -36,6 +36,7 @@ let breakerTripped = false;
 
 async function tick(context: string): Promise<void> {
   const oracle = await oracleRouter.getPrice("MNT/MOCK");
+  if (oracle.warnings?.length) console.warn("[oracle]", oracle.warnings.join("; "));
   priceHistory.push(oracle.priceWei);
   if (priceHistory.length > PRICE_HISTORY_MAX) priceHistory.shift();
 
