@@ -27,9 +27,15 @@ Fill these in after deployment:
 
 ---
 
+## The Problem
+
+AI agents are beginning to make on-chain decisions, but most agentic DeFi demos stop at "the model made a trade." That is not enough for real wallets. A useful autonomous DeFi agent must handle stale oracle data, manipulated DEX quotes, ERC20 approvals, slippage, failed simulations, protocol allowlists, daily limits, liquidation risk, and human auditability.
+
+The hard problem is not getting an LLM to say `buy` or `sell`. The hard problem is proving that a model's intent can be converted into bounded, simulated, protocol-aware execution without giving the model arbitrary control over user funds.
+
 ## The Idea
 
-The hackathon asks whether AI agents can act autonomously on-chain and whether their behavior can be benchmarked. This project answers with a guarded wallet system:
+The hackathon asks whether AI agents can act autonomously on-chain and whether their behavior can be benchmarked. This project answers with a guarded DeFi wallet system:
 
 - An AI agent controls an `AgentVault` and proposes `buy`, `sell`, or `hold`.
 - A deterministic DCA runner controls a second `AgentVault` as the "human baseline."
@@ -37,7 +43,9 @@ The hackathon asks whether AI agents can act autonomously on-chain and whether t
 - Every vault action emits `AgentDecision`, and every market/trade event emits from `MockDEX`.
 - The dashboard reconstructs the Human-vs-AI comparison from chain logs, not a trusted off-chain database.
 
-The key design choice: the model proposes high-level intent only. TypeScript encodes calldata, the client policy preflights the move, and the Solidity vault remains the source of truth.
+The key design choice: the model proposes high-level intent only. Protocol adapters encode calldata, the risk engine validates oracle/portfolio/simulation state, and the Solidity vault remains the source of truth.
+
+The long-term direction is a Turing Test for DeFi agents: can an AI wallet outperform or out-risk-manage a deterministic human baseline while every action is bounded by contracts, simulated before execution, validated by real protocol data, and replayable from on-chain events?
 
 ---
 
@@ -310,10 +318,14 @@ The dashboard now includes protocol readiness alongside the replay:
 
 ## Roadmap
 
-- Real Mantle DEX integration with slippage bounds
+- Merchant Moe real quote smoke tests with Pyth deviation checks
+- Mantle mainnet-fork simulation before any real DEX execution
+- Read-only Lendle/INIT lending risk adapters for health factor, borrow caps, and liquidation buffer
+- Structured decision traces and OpenAI eval scenarios for policy obedience
 - Multi-agent leaderboard from event logs
-- ERC-4337/session-key account abstraction
-- Mainnet hardening with multisig, timelock, monitoring, and audit
+- ERC-4337/session-key account abstraction after the protocol/risk stack is stable
+
+For the deeper real-protocol strategy, see [docs/strategy/real-defi-problem-statement.md](docs/strategy/real-defi-problem-statement.md).
 
 ---
 
