@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { parseEther } from "viem";
-import { encodeBuy, encodeSell } from "./dex.js";
 import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protocols/types.js";
 import type { Decision, VaultState } from "./types.js";
 
@@ -44,40 +43,6 @@ function parsePositiveEtherAmount(value: unknown, field: string): bigint {
   return parsed;
 }
 
-/// Pure mapping: tool input + DEX address -> contract-faithful Decision.
-/// Calldata and wei are computed here, never by the LLM.
-export function parseToolUse(input: any, dex: `0x${string}`): Decision {
-  if (input?.action === "hold") {
-    return { kind: "hold", rationale: String(input.rationale ?? "") };
-  }
-  if (input?.action === "buy") {
-    if (input.amountMnt === undefined) throw new Error("buy missing amountMnt");
-    const valueWei = parsePositiveEtherAmount(input.amountMnt, "amountMnt");
-    return {
-      kind: "execute",
-      action: "buy",
-      target: dex,
-      valueWei,
-      calldata: encodeBuy(),
-      rationale: String(input.rationale ?? ""),
-    };
-  }
-  if (input?.action === "sell") {
-    if (input.amountToken === undefined) throw new Error("sell missing amountToken");
-    const amountTokenWei = parsePositiveEtherAmount(input.amountToken, "amountToken");
-    return {
-      kind: "execute",
-      action: "sell",
-      target: dex,
-      valueWei: 0n,
-      amountTokenWei,
-      calldata: encodeSell(amountTokenWei),
-      rationale: String(input.rationale ?? ""),
-    };
-  }
-  throw new Error(`unknown action: ${input?.action}`);
-}
-
 export function parseToolUseIntent(input: any): TradeIntent | { action: "hold"; rationale: string } {
   if (input?.action === "hold") {
     return { action: "hold", rationale: String(input.rationale ?? "") };
@@ -101,7 +66,7 @@ export function parseToolUseIntent(input: any): TradeIntent | { action: "hold"; 
   throw new Error(`unknown action: ${input?.action}`);
 }
 
-async function buildDecisionFromToolUse(input: any, adapter: ProtocolAdapter): Promise<Decision> {
+export async function buildDecisionFromToolUse(input: any, adapter: ProtocolAdapter): Promise<Decision> {
   const intent = parseToolUseIntent(input);
   if (intent.action === "hold") return { kind: "hold", rationale: intent.rationale };
   const quote = await adapter.quote(intent);

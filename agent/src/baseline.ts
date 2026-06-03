@@ -3,13 +3,15 @@ import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./cha
 import { chain, baselineVaultAddress, dexAddress, getBaselineWalletClient } from "./config.js";
 import { createMockDexOracleRouter } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
+import { createProtocolRegistry } from "./protocols/registry.js";
 import { planToDecision } from "./protocols/types.js";
 import { evaluateRisk } from "./risk/engine.js";
 import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
 
 const DCA_MNT = "0.005";
-const protocol = createMockDexAdapter(dexAddress, readPrice);
+const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
+const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createMockDexOracleRouter(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 
@@ -39,8 +41,8 @@ async function tick(): Promise<void> {
   const risk = evaluateRisk({
     decision,
     state,
-    allowedTargets: [protocol.target],
-    allowedSelectors: protocol.allowedSelectors,
+    allowedTargets: protocolRegistry.allowedTargets(),
+    allowedSelectors: protocolRegistry.allowedSelectors(),
     oracle,
     quotePriceWei: quote.priceWei,
     simulation,
@@ -55,7 +57,7 @@ async function tick(): Promise<void> {
     return;
   }
 
-  const hash = await submitExecute(baselineVaultAddress, decision, baselineClient);
+  const hash = await submitExecute(baselineVaultAddress, decision, baselineClient, { simulation });
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[baseline executed]", `${base}/tx/${hash}`);
 }

@@ -6,6 +6,7 @@ import { chain, aiVaultAddress, dexAddress, agentAccount } from "./config.js";
 import { createMockDexOracleRouter } from "./oracles/router.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
+import { createProtocolRegistry } from "./protocols/registry.js";
 import { evaluateRisk } from "./risk/engine.js";
 import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
@@ -23,7 +24,8 @@ function createReasoningClient(): ReasoningClient {
 }
 
 const client = createReasoningClient();
-const protocol = createMockDexAdapter(dexAddress, readPrice);
+const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
+const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createMockDexOracleRouter(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
@@ -77,8 +79,8 @@ async function tick(context: string): Promise<void> {
   const risk = evaluateRisk({
     decision,
     state,
-    allowedTargets: [protocol.target],
-    allowedSelectors: protocol.allowedSelectors,
+    allowedTargets: protocolRegistry.allowedTargets(),
+    allowedSelectors: protocolRegistry.allowedSelectors(),
     oracle,
     quotePriceWei: state.priceWei,
     simulation,
@@ -94,7 +96,7 @@ async function tick(context: string): Promise<void> {
     return;
   }
 
-  const hash = await submitExecute(aiVaultAddress, decision);
+  const hash = await submitExecute(aiVaultAddress, decision, undefined, { simulation });
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[executed]", `${base}/tx/${hash}`);
   await sendAlert(decision, hash);

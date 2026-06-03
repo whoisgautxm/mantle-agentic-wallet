@@ -71,6 +71,8 @@ export interface MerchantMoeQuote {
 export interface MerchantMoeReadOnlyAdapter {
   id: "merchant-moe";
   mode: "read-only";
+  supportedActions: readonly ["buy", "sell"];
+  chainId: number;
   config: MerchantMoeConfig;
   quoteExactInput(input: MerchantMoeQuoteInput): Promise<MerchantMoeQuote>;
   buildPlan(): never;
@@ -120,6 +122,8 @@ export function createMerchantMoeReadOnlyAdapter(
   return {
     id: "merchant-moe",
     mode: "read-only",
+    supportedActions: ["buy", "sell"],
+    chainId: config.chainId,
     config,
     async quoteExactInput(input: MerchantMoeQuoteInput): Promise<MerchantMoeQuote> {
       const route = asRoute(input.route);

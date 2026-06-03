@@ -1,30 +1,22 @@
 import { publicClient, walletClient, aiVaultAddress, dexAddress } from "./config.js";
 import { DEX_ABI } from "./dex.js";
+import { assertSimulationSucceeded, simulateExecute, type ExecuteSimulationClient } from "./simulation/simulator.js";
 import type { Decision, VaultState } from "./types.js";
+import { VAULT_ABI } from "./vault.js";
+import type { SimulationResult } from "./simulation/types.js";
 
-export const VAULT_ABI = [
-  { type: "function", name: "spendLimitPerTx", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "dailyLimit", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "spentToday", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "windowStart", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
-  { type: "function", name: "allowedTarget", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
-  {
-    type: "function",
-    name: "execute",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "target", type: "address" },
-      { name: "value", type: "uint256" },
-      { name: "data", type: "bytes" },
-      { name: "rationale", type: "string" },
-    ],
-    outputs: [{ type: "bytes" }],
-  },
-] as const;
+export { VAULT_ABI };
 
 type ExecuteDecision = Extract<Decision, { kind: "execute" }>;
 type AgentWalletClient = typeof walletClient;
+
+export interface SubmitExecuteOptions {
+  account?: `0x${string}`;
+  simulation?: SimulationResult;
+  simulator?: typeof simulateExecute;
+  simulationClient?: ExecuteSimulationClient;
+  waitForTransactionReceipt?: (hash: `0x${string}`) => Promise<{ status: "success" | "reverted" }>;
+}
 
 const READ_RETRY_DELAY_MS = 2500;
 const READ_RETRIES = 5;
@@ -116,18 +108,34 @@ export async function submitExecute(
   vault: `0x${string}`,
   d: ExecuteDecision,
   client: AgentWalletClient = walletClient,
+  options: SubmitExecuteOptions = {},
 ): Promise<`0x${string}`> {
+  const account = options.account ?? ((client as any).account?.address as `0x${string}` | undefined);
+  const preflight =
+    options.simulation ??
+    (await (options.simulator ?? simulateExecute)(vault, d, account ?? failMissingSimulationAccount(), {
+      client: options.simulationClient,
+    }));
+
+  assertSimulationSucceeded(preflight);
+
   const hash = await client.writeContract({
     address: vault,
     abi: VAULT_ABI,
     functionName: "execute",
     args: [d.target, d.valueWei, d.calldata, d.rationale],
   });
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  const waitForTransactionReceipt =
+    options.waitForTransactionReceipt ?? ((txHash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash: txHash }));
+  const receipt = await waitForTransactionReceipt(hash);
   if (receipt.status !== "success") {
     throw new Error(`execute tx reverted on-chain: ${hash}`);
   }
   return hash;
+}
+
+function failMissingSimulationAccount(): never {
+  throw new Error("execute simulation requires an account address");
 }
 
 export async function isTargetAllowed(

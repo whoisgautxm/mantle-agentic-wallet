@@ -10,7 +10,9 @@ Add a preflight simulation layer before every transaction. The agent should not 
 
 ## Current Project Fit
 
-Today, `submitExecute()` writes to the vault and checks the receipt status after the transaction lands. That confirms success after gas is spent. The next phase should simulate before write.
+Implemented v1 now gates `submitExecute()` with a preflight simulation before `writeContract`. The AI runner and deterministic baseline runner both compute a simulation result, pass it into risk evaluation, and pass the same result into submission so a failed simulation cannot accidentally proceed.
+
+The remaining next steps are richer gas/cost reporting, dashboard surfacing, and mainnet-fork protocol simulations for real adapters.
 
 ## Real Problems It Solves
 
@@ -74,11 +76,11 @@ AI intent
 
 ## Acceptance Criteria
 
-- Failed simulation blocks execution.
-- Revert reason is surfaced in logs/dashboard.
-- Existing MockDEX trades still execute.
-- Adapter tests include at least one malformed calldata simulation failure.
-- Simulation result is included in local decision logs.
+- Failed simulation blocks execution. Implemented in `agent/src/chain.ts`.
+- Revert reason is surfaced in risk/submit errors. Dashboard surfacing remains future work.
+- Existing MockDEX AI and baseline trades still use the same execution path.
+- Unit tests cover successful simulations, gas-estimate warnings, failed simulations, and submit blocking.
+- Simulation result is included in local risk evaluation. Structured decision-log persistence remains future work.
 
 ## Resources
 

@@ -7,6 +7,8 @@ const SELL_SELECTOR = encodeSell(1n).slice(0, 10) as `0x${string}`;
 export function createMockDexAdapter(target: `0x${string}`, readPrice: () => Promise<bigint>): ProtocolAdapter {
   return {
     id: "mockdex",
+    mode: "execution",
+    supportedActions: ["buy", "sell"],
     target,
     allowedSelectors: [BUY_SELECTOR, SELL_SELECTOR],
     async quote(intent: TradeIntent): Promise<QuoteResult> {

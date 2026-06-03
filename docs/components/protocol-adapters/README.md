@@ -10,7 +10,11 @@ Move from a hardcoded MockDEX integration to a protocol adapter system that can 
 
 ## Current Project Fit
 
-Today, `agent/src/dex.ts` directly exposes:
+Implemented v1 now has an executable/read-only protocol registry in `agent/src/protocols/registry.ts`. The AI runner and baseline runner resolve MockDEX through that registry, while Merchant Moe remains a read-only adapter that cannot be retrieved as executable.
+
+The remaining next steps are richer adapter metadata for token pairs/slippage, dashboard protocol cards, and mainnet-fork simulation before any real adapter execution.
+
+Earlier, `agent/src/dex.ts` directly exposed:
 
 - `DEX_ABI`
 - `encodeBuy()`
@@ -78,13 +82,13 @@ interface ExecutionPlan {
 
 ## First Adapter Migration
 
-Start by wrapping current MockDEX behavior:
+Implemented v1 wraps current MockDEX behavior:
 
 - `mockDexAdapter.quote()` reads `price()`.
 - `mockDexAdapter.buildPlan()` returns `buy()` or `sell(uint256)` calldata.
-- Existing `brain.ts` can keep proposing `buy`, `sell`, or `hold`.
-- `parseToolUse()` should return intent, not calldata.
-- Adapter converts intent into `ExecutionPlan`.
+- Existing `brain.ts` still lets the model propose `buy`, `sell`, or `hold`.
+- `parseToolUseIntent()` returns intent, not calldata.
+- The adapter converts intent into `ExecutionPlan`.
 
 ## Real Protocol Path
 
@@ -106,11 +110,11 @@ Show:
 
 ## Acceptance Criteria
 
-- MockDEX behavior works through the adapter interface.
+- MockDEX behavior works through the adapter interface. Implemented in `agent/src/protocols/mockDexAdapter.ts`.
 - `brain.ts` no longer imports DEX-specific calldata encoders directly.
 - Every execution plan has a protocol ID, target, calldata, value, and summary.
-- Risk engine receives normalized quote and plan metadata.
-- Tests prove unknown adapters/actions cannot execute.
+- Risk engine receives registry-derived target and selector guard metadata.
+- Tests prove unknown, duplicate, and read-only adapters cannot execute.
 
 ## Resources
 

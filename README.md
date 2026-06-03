@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-47%2F47-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-56%2F56-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -69,8 +69,9 @@ The key design choice: the model proposes high-level intent only. TypeScript enc
 3. **AI decides** - the configured provider must call `propose_action` with `buy`, `sell`, or `hold`.
 4. **Code encodes** - `agent/src/dex.ts` builds `buy()` or `sell(uint256)` calldata; the LLM never writes raw calldata.
 5. **Policy guards** - client-side checks mirror per-tx, daily-window, pause, balance, allowlist, and sell-token limits.
-6. **Vault executes** - `AgentVault.execute(...)` enforces hard on-chain limits and emits `AgentDecision`.
-7. **Dashboard replays** - Next.js reads `AgentDecision`, `PriceSet`, `Bought`, and `Sold` logs.
+6. **Simulation preflights** - viem simulates `AgentVault.execute(...)` and blocks failed calls before `writeContract`.
+7. **Vault executes** - `AgentVault.execute(...)` enforces hard on-chain limits and emits `AgentDecision`.
+8. **Dashboard replays** - Next.js reads `AgentDecision`, `PriceSet`, `Bought`, and `Sold` logs.
 
 ---
 
@@ -86,6 +87,7 @@ The key design choice: the model proposes high-level intent only. TypeScript enc
 | Agent rotation | `setAgent(newAgent)` | Owner can rotate compromised session keys |
 | Owner withdrawal | `withdraw(amount)` | Human owner can recover funds |
 | Calldata generation in code | `dex.ts` | Prevents LLM malformed-calldata or arbitrary-call footguns |
+| Execution simulation | `agent/src/simulation` | Blocks calls that would revert before spending gas |
 | Receipt status check | `waitForTransactionReceipt` | Reverted txs are not reported as successful |
 | Drawdown soft breaker | `agent/src/agent.ts` | AI stops trading if portfolio value drops 15% from observed peak |
 | Optional Telegram alerts | `agent/src/telegram.ts` | Sends hold/trade notifications when env vars are configured |
@@ -171,7 +173,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 47 passing |
+| Agent | `cd agent && npm test` | 56 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
