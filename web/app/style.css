@@ -96,6 +96,10 @@ h2 {
   margin-bottom: 18px;
 }
 
+.insights.single {
+  grid-template-columns: 1fr;
+}
+
 .insight-card {
   padding: 20px;
 }
@@ -190,6 +194,43 @@ h2 {
   align-items: center;
   padding: 14px;
   margin-top: 10px;
+}
+
+.portfolio-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.allowance-table {
+  margin-top: 16px;
+}
+
+.table-head,
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.25fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.table-head {
+  color: var(--gold);
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.table-row {
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 16px;
+  background: rgba(10, 8, 5, 0.34);
+  padding: 12px 14px;
+}
+
+.table-row span {
+  color: var(--muted);
 }
 
 .status-card {
@@ -306,7 +347,9 @@ h2 {
   }
 
   .metric-grid,
-  .risk-row {
+  .risk-row,
+  .table-head,
+  .table-row {
     grid-template-columns: 1fr;
   }
 

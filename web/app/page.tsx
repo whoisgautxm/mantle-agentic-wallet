@@ -3,8 +3,10 @@ import { buildSeries, currentStanding } from "../lib/pnl";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
 import OraclePanel from "./components/OraclePanel";
+import PortfolioPanel from "./components/PortfolioPanel";
 import RiskPanel from "./components/RiskPanel";
 import addresses from "../../shared/addresses.json";
+import { getPortfolioStatus } from "../lib/portfolio";
 import { getLiveStatus } from "../lib/status";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,10 @@ export default async function Page() {
   const prices = await getPriceHistory();
   const trades = await getTrades();
   const liveStatus = await getLiveStatus();
+  const portfolioStatus = await getPortfolioStatus([
+    { name: "AI", address: aiVault },
+    { name: "Baseline", address: baselineVault },
+  ]);
   const series = buildSeries(prices, trades, aiVault, baselineVault);
   const standing = currentStanding(series);
 
@@ -84,6 +90,10 @@ export default async function Page() {
       <section className="insights">
         <OraclePanel status={liveStatus} />
         <RiskPanel status={liveStatus} />
+      </section>
+
+      <section className="insights single">
+        <PortfolioPanel status={portfolioStatus} />
       </section>
 
       <section className="chart-card">
