@@ -24,6 +24,7 @@ It reconstructs:
 - baseline token value
 - AI and baseline decision feeds
 - protocol readiness for MockDEX, Merchant Moe, Pyth, simulation, and allowance tracking
+- execution preflight feed sourced from JSONL traces
 
 This should remain the foundation. New components should extend event sources and metadata, not replace the replay model.
 
@@ -78,7 +79,7 @@ Medium term:
 - Risk Status: current breakers, blocked decisions, risk thresholds.
 - Protocol Readiness: executable/read-only state, allowlist posture, oracle mode, simulation gate, and allowance watch.
 - Protocol Exposure: per protocol and per token values.
-- Simulation Feed: latest proposed tx, gas estimate, pass/fail.
+- Simulation Feed: latest proposed tx, target, selector, value, calldata bytes, simulation pass/fail, gas estimate, revert reason, tx hash, and blocked-execution reason. Implemented from agent/baseline trace ticks plus `merchant_moe.fork_simulation` events.
 - Allowance Watch: spender, token, allowance, risk label.
 - Eval Summary: scenario pass rate, policy obedience, PnL vs baseline.
 
@@ -87,6 +88,7 @@ Medium term:
 - Existing dashboard still works with only MockDEX events.
 - New panels gracefully show empty states when components are not enabled.
 - Protocol readiness summarizes MockDEX, Merchant Moe, Pyth, simulation, and allowance state.
+- Execution preflight feed gracefully handles missing traces and read-only Merchant Moe blockers.
 - Every explorer link is derived from chain ID and tx hash/address.
 - Dashboard avoids Alchemy log-limit failures through chunking/lookback controls.
 

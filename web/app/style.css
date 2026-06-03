@@ -348,6 +348,65 @@ h2 {
   border-left-color: rgba(216, 164, 71, 0.72);
 }
 
+.simulation-feed-grid {
+  grid-template-columns: 1fr;
+  margin-top: 14px;
+}
+
+.simulation-card {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(114, 168, 255, 0.12), transparent 22rem),
+    linear-gradient(135deg, rgba(216, 164, 71, 0.09), transparent 42%),
+    rgba(10, 8, 5, 0.34);
+}
+
+.simulation-empty {
+  margin-top: 14px;
+}
+
+.simulation-tx,
+.simulation-blockers {
+  display: grid;
+  gap: 8px;
+}
+
+.simulation-tx {
+  grid-template-columns: 1.1fr 0.7fr 0.6fr 1.1fr;
+  margin: 14px 0;
+}
+
+.simulation-blockers {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.simulation-tx > div,
+.simulation-blockers > div {
+  border: 1px solid rgba(114, 168, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(114, 168, 255, 0.06);
+  padding: 10px;
+}
+
+.simulation-tx span,
+.simulation-blockers span {
+  display: block;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.75rem;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.simulation-tx strong,
+.simulation-blockers strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.simulation-metrics {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .lending-metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -505,6 +564,8 @@ h2 {
   .metric-grid,
   .eval-grid,
   .eval-metrics,
+  .simulation-tx,
+  .simulation-blockers,
   .risk-row,
   .protocol-row,
   .table-head,

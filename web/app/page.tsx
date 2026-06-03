@@ -8,6 +8,7 @@ import PortfolioPanel from "./components/PortfolioPanel";
 import ProtocolEvidencePanel from "./components/ProtocolEvidencePanel";
 import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
+import SimulationFeedPanel from "./components/SimulationFeedPanel";
 import EvalReadinessPanel from "./components/EvalReadinessPanel";
 import addresses from "../../shared/addresses.json";
 import { getEvalReadiness } from "../lib/evalReadiness";
@@ -15,6 +16,7 @@ import { getLendingEvidence } from "../lib/lendingEvidence";
 import { getPortfolioStatus } from "../lib/portfolio";
 import { getProtocolEvidence } from "../lib/protocolEvidence";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
+import { getSimulationFeed } from "../lib/simulationFeed";
 import { getLiveStatus } from "../lib/status";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +69,7 @@ export default async function Page() {
   ]);
   const protocolReadiness = getProtocolReadiness(liveStatus, portfolioStatus);
   const protocolEvidence = await getProtocolEvidence();
+  const simulationFeed = await getSimulationFeed();
   const lendingEvidence = await getLendingEvidence();
   const evalReadiness = await getEvalReadiness();
   const series = buildSeries(prices, trades, aiVault, baselineVault);
@@ -126,6 +129,10 @@ export default async function Page() {
 
       <section className="insights single">
         <ProtocolEvidencePanel evidence={protocolEvidence} />
+      </section>
+
+      <section className="insights single">
+        <SimulationFeedPanel feed={simulationFeed} />
       </section>
 
       <section className="insights single">

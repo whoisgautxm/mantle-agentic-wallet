@@ -359,7 +359,7 @@ npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
 
 If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
-The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels.
+The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels. The execution preflight feed also replays proposed agent/baseline transactions and Merchant Moe fork simulations with target, selector, value, calldata bytes, simulation pass/fail, gas estimate, revert reason, tx hash, and blocked-execution reason.
 
 Merchant Moe references:
 
@@ -456,6 +456,7 @@ The dashboard now includes protocol readiness alongside the replay:
 - MockDEX executable status and vault allowlist posture
 - Merchant Moe read-only adapter readiness
 - Merchant Moe quote/fork-readiness evidence from JSONL traces
+- execution preflight feed for proposed tx, simulation pass/fail, gas, revert, and blocker reason
 - Lendle/INIT-style lending health-factor evidence from JSONL traces
 - Pyth oracle active/standby/fallback state
 - execution simulation gate status
