@@ -1,10 +1,15 @@
 import { encodeBuy, encodeSell } from "../dex.js";
+import { buildExecutionProtection, loadExecutionProtectionFromEnv, type ExecutionProtectionConfig } from "./executionProtection.js";
 import type { ProtocolAdapter, QuoteResult, TradeIntent } from "./types.js";
 
 const BUY_SELECTOR = encodeBuy().slice(0, 10) as `0x${string}`;
 const SELL_SELECTOR = encodeSell(1n).slice(0, 10) as `0x${string}`;
 
-export function createMockDexAdapter(target: `0x${string}`, readPrice: () => Promise<bigint>): ProtocolAdapter {
+export function createMockDexAdapter(
+  target: `0x${string}`,
+  readPrice: () => Promise<bigint>,
+  protection: ExecutionProtectionConfig = loadExecutionProtectionFromEnv(),
+): ProtocolAdapter {
   return {
     id: "mockdex",
     mode: "execution",
@@ -25,6 +30,7 @@ export function createMockDexAdapter(target: `0x${string}`, readPrice: () => Pro
     buildPlan(intent: TradeIntent, quote: QuoteResult) {
       if (intent.action === "buy") {
         const valueWei = intent.amountMntWei ?? 0n;
+        const executionProtection = buildExecutionProtection(quote.expectedTokenWei, protection);
         return {
           protocolId: "mockdex",
           action: "buy",
@@ -32,11 +38,13 @@ export function createMockDexAdapter(target: `0x${string}`, readPrice: () => Pro
           valueWei,
           calldata: encodeBuy(),
           expectedOutWei: quote.expectedTokenWei,
+          ...executionProtection,
           summary: `MockDEX buy with ${valueWei} wei MNT`,
         };
       }
 
       const amountTokenWei = intent.amountTokenWei ?? 0n;
+      const executionProtection = buildExecutionProtection(quote.expectedMntWei, protection);
       return {
         protocolId: "mockdex",
         action: "sell",
@@ -45,6 +53,7 @@ export function createMockDexAdapter(target: `0x${string}`, readPrice: () => Pro
         calldata: encodeSell(amountTokenWei),
         amountTokenWei,
         expectedOutWei: quote.expectedMntWei,
+        ...executionProtection,
         summary: `MockDEX sell of ${amountTokenWei} token-wei`,
       };
     },

@@ -54,6 +54,7 @@ Current project state:
 - Merchant Moe read-only quote smoke CLI exists.
 - Merchant Moe quote smoke can report quote-vs-reference deviation when decimals and a manual or Pyth reference are configured.
 - Merchant Moe quote smoke writes JSONL trace events for replay and reports.
+- Merchant Moe fork-readiness CLI computes min-output/slippage metadata and blocks execution while calldata is disabled.
 - Merchant Moe execution is intentionally disabled.
 - ERC20 allowance tracking can watch the LB Router spender.
 - Protocol readiness dashboard shows read-only/execution status.
@@ -62,9 +63,8 @@ Next integration:
 
 1. Add token route config for WMNT/stables or other verified Mantle pairs.
 2. Build eval runners that replay JSONL traces and grade policy obedience.
-3. Add slippage/min-output fields to `ExecutionPlan`.
-4. Run mainnet-fork simulation before enabling calldata generation.
-5. Only then consider guarded live execution.
+3. Run mainnet-fork simulation before enabling calldata generation.
+4. Only then consider guarded live execution.
 
 Primary risk questions:
 
@@ -186,6 +186,7 @@ Goal: prove real protocol compatibility without risking funds.
 
 - Merchant Moe quote smoke CLI.
 - Pyth reference comparison for real token pairs.
+- Merchant Moe fork-readiness reports for slippage/min-output and execution blockers.
 - Dashboard quote card.
 - JSON decision trace for every agent tick.
 

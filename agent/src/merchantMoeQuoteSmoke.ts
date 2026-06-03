@@ -157,7 +157,7 @@ export function buildMerchantMoeQuoteRiskReport(
   };
 }
 
-async function resolveReferencePriceWei(config: MerchantMoeQuoteSmokeConfig): Promise<bigint | undefined> {
+export async function resolveMerchantMoeReferencePriceWei(config: MerchantMoeQuoteSmokeConfig): Promise<bigint | undefined> {
   if (config.referenceSource === "manual") return config.referencePriceWei;
   if (config.referenceSource === "pyth-mnt-usd") {
     const oracle = createPythMntUsdOracleRouter();
@@ -203,7 +203,7 @@ export async function runMerchantMoeQuoteSmoke(
 ): Promise<MerchantMoeQuote> {
   const config = parseMerchantMoeQuoteSmokeConfig(env);
   const quote = await adapter.quoteExactInput(config);
-  const referencePriceWei = await resolveReferencePriceWei(config);
+  const referencePriceWei = await resolveMerchantMoeReferencePriceWei(config);
   const risk = buildMerchantMoeQuoteRiskReport(quote, config, referencePriceWei);
   write(formatMerchantMoeQuote(quote, risk));
   try {

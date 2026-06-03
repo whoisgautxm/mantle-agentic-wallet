@@ -12,7 +12,9 @@ Add a preflight simulation layer before every transaction. The agent should not 
 
 Implemented v1 now gates `submitExecute()` with a preflight simulation before `writeContract`. The AI runner and deterministic baseline runner both compute a simulation result, pass it into risk evaluation, and pass the same result into submission so a failed simulation cannot accidentally proceed.
 
-The remaining next steps are richer gas/cost reporting, dashboard surfacing, and mainnet-fork protocol simulations for real adapters.
+Execution plans now carry normalized `expectedOutWei`, `minOutWei`, `slippageBps`, and optional `deadlineSeconds` metadata. Merchant Moe has a fork-readiness CLI that verifies quote/slippage/reference/fork preconditions while keeping execution disabled.
+
+The remaining next steps are richer gas/cost reporting, dashboard surfacing, and actual mainnet-fork protocol simulations for real adapters once calldata generation exists.
 
 ## Real Problems It Solves
 
@@ -81,6 +83,7 @@ AI intent
 - Existing MockDEX AI and baseline trades still use the same execution path.
 - Unit tests cover successful simulations, gas-estimate warnings, failed simulations, and submit blocking.
 - Simulation result is included in local risk evaluation. Structured decision-log persistence remains future work.
+- Merchant Moe fork readiness reports min-output/slippage metadata and blocks execution while calldata remains disabled. Implemented.
 
 ## Resources
 

@@ -17,6 +17,12 @@ export interface QuoteResult {
   expectedMntWei?: bigint;
 }
 
+export interface ExecutionProtection {
+  slippageBps: bigint;
+  minOutWei?: bigint;
+  deadlineSeconds?: bigint;
+}
+
 export interface ExecutionPlan {
   protocolId: string;
   action: ProtocolAction;
@@ -25,6 +31,9 @@ export interface ExecutionPlan {
   calldata: `0x${string}`;
   amountTokenWei?: bigint;
   expectedOutWei?: bigint;
+  minOutWei?: bigint;
+  slippageBps?: bigint;
+  deadlineSeconds?: bigint;
   summary: string;
 }
 

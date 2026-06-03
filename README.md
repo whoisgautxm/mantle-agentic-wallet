@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-92%2F92-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-100%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 92 passing |
+| Agent | `cd agent && npm test` | 100 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -232,6 +232,11 @@ MERCHANT_MOE_LB_QUOTER=0x501b8AFd35df20f531fF45F6f695793AC3316c85
 MERCHANT_MOE_LB_ROUTER=0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a
 MERCHANT_MOE_ROUTE=
 MERCHANT_MOE_AMOUNT_IN_WEI=
+MERCHANT_MOE_SLIPPAGE_BPS=100
+MERCHANT_MOE_DEADLINE_SECONDS=1200
+MERCHANT_MOE_FORK_RPC_URL=
+MANTLE_MAINNET_FORK_RPC_URL=
+MERCHANT_MOE_ENABLE_FORK_SIMULATION=false
 MERCHANT_MOE_TOKEN_IN_DECIMALS=18
 MERCHANT_MOE_TOKEN_OUT_DECIMALS=18
 MERCHANT_MOE_REFERENCE_SOURCE=none
@@ -256,6 +261,16 @@ npm run quote:merchant-moe
 ```
 
 The quote smoke requires `MERCHANT_MOE_ROUTE` as comma-separated token addresses and `MERCHANT_MOE_AMOUNT_IN_WEI` as a raw integer amount. Optional decimal/reference settings let it report quote-vs-reference deviation. For MNT -> USD-like routes, `MERCHANT_MOE_REFERENCE_SOURCE=pyth-mnt-usd` compares the normalized token-in/token-out quote against the inverted Pyth MNT/USD feed. The command only calls Merchant Moe's LBQuoter and never builds or submits swap calldata.
+
+To produce a fork-readiness report with slippage/min-output metadata:
+
+```bash
+cd agent
+set -a && source ../.env && set +a
+npm run readiness:merchant-moe
+```
+
+The readiness report computes `minOutWei` from `MERCHANT_MOE_SLIPPAGE_BPS`, checks the quote/reference deviation, records whether a fork RPC is configured, and still blocks execution because Merchant Moe calldata generation is intentionally disabled until fork tests are added.
 
 ### Local JSONL Traces
 

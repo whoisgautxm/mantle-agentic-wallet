@@ -6,7 +6,7 @@ const dex = "0x3333333333333333333333333333333333333333" as const;
 
 describe("createMockDexAdapter", () => {
   it("builds a buy execution plan with quote metadata", async () => {
-    const adapter = createMockDexAdapter(dex, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(dex, async () => 2n * 10n ** 18n, { slippageBps: 100n, deadlineSeconds: 600n });
     const quote = await adapter.quote({
       action: "buy",
       amountMntWei: 10n ** 18n,
@@ -21,11 +21,14 @@ describe("createMockDexAdapter", () => {
     expect(plan.target).toBe(dex);
     expect(plan.valueWei).toBe(10n ** 18n);
     expect(plan.expectedOutWei).toBe(5n * 10n ** 17n);
+    expect(plan.minOutWei).toBe(495n * 10n ** 15n);
+    expect(plan.slippageBps).toBe(100n);
+    expect(plan.deadlineSeconds).toBe(600n);
     expect(adapter.allowedSelectors).toContain(plan.calldata.slice(0, 10));
   });
 
   it("builds a sell execution plan and converts it to a Decision", async () => {
-    const adapter = createMockDexAdapter(dex, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(dex, async () => 2n * 10n ** 18n, { slippageBps: 250n });
     const intent = {
       action: "sell" as const,
       amountTokenWei: 5n * 10n ** 17n,
@@ -37,6 +40,7 @@ describe("createMockDexAdapter", () => {
 
     expect(plan.valueWei).toBe(0n);
     expect(plan.expectedOutWei).toBe(10n ** 18n);
+    expect(plan.minOutWei).toBe(975n * 10n ** 15n);
     expect(decision.kind).toBe("execute");
     if (decision.kind === "execute") {
       expect(decision.action).toBe("sell");

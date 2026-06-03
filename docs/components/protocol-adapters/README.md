@@ -10,9 +10,9 @@ Move from a hardcoded MockDEX integration to a protocol adapter system that can 
 
 ## Current Project Fit
 
-Implemented v1 now has an executable/read-only protocol registry in `agent/src/protocols/registry.ts`. The AI runner and baseline runner resolve MockDEX through that registry, while Merchant Moe remains a read-only adapter that cannot be retrieved as executable.
+Implemented v1 now has an executable/read-only protocol registry in `agent/src/protocols/registry.ts`. The AI runner and baseline runner resolve MockDEX through that registry, while Merchant Moe remains a read-only adapter that cannot be retrieved as executable. Execution plans now carry normalized slippage/min-output/deadline metadata for future real DEX adapters.
 
-The remaining next steps are richer adapter metadata for token pairs/slippage, dashboard protocol cards, and mainnet-fork simulation before any real adapter execution.
+The remaining next steps are richer adapter metadata for token pairs, dashboard protocol cards, and mainnet-fork simulation before any real adapter execution.
 
 Earlier, `agent/src/dex.ts` directly exposed:
 
@@ -75,7 +75,8 @@ interface ExecutionPlan {
   approvals: ApprovalPlan[];
   expectedOutWei?: bigint;
   minOutWei?: bigint;
-  deadline?: bigint;
+  slippageBps?: bigint;
+  deadlineSeconds?: bigint;
   summary: string;
 }
 ```
@@ -89,12 +90,17 @@ Implemented v1 wraps current MockDEX behavior:
 - Existing `brain.ts` still lets the model propose `buy`, `sell`, or `hold`.
 - `parseToolUseIntent()` returns intent, not calldata.
 - The adapter converts intent into `ExecutionPlan`.
+- `ExecutionPlan` includes `expectedOutWei`, `minOutWei`, `slippageBps`, and optional `deadlineSeconds`.
 
 ## Real Protocol Path
 
 Merchant Moe is highly relevant because its docs describe it as a DEX built for Mantle with swapping, liquidity, farming, and Liquidity Book support. Its contracts page lists router, factory, aggregator, and Liquidity Book router/quoter addresses.
 
 Important caution: published Merchant Moe contract addresses are for Mantle mainnet unless a page explicitly says otherwise. For this project, first integrate a read-only adapter and mainnet-fork simulation. Do not execute live mainnet trades until risk, oracle, approvals, and simulation are mature.
+
+Implemented readiness step:
+
+- `npm run readiness:merchant-moe` quotes the configured route, computes min-output from slippage, checks quote/reference deviation, reports fork RPC status, writes JSONL trace evidence, and blocks execution because calldata generation remains disabled.
 
 ## Dashboard Implications
 
