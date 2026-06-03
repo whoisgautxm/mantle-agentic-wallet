@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 107 passing |
+| Agent | `cd agent && npm test` | 111 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -237,6 +237,12 @@ MERCHANT_MOE_DEADLINE_SECONDS=1200
 MERCHANT_MOE_FORK_RPC_URL=
 MANTLE_MAINNET_FORK_RPC_URL=
 MERCHANT_MOE_ENABLE_FORK_SIMULATION=false
+MERCHANT_MOE_SIMULATION_MODE=router-call
+MERCHANT_MOE_SIMULATION_FROM=
+MERCHANT_MOE_SIMULATION_VAULT=
+MERCHANT_MOE_SIMULATION_VALUE_WEI=0
+MERCHANT_MOE_SWAP_CALLDATA=
+MERCHANT_MOE_SIMULATION_RATIONALE=Merchant Moe mainnet-fork simulation
 MERCHANT_MOE_TOKEN_IN_DECIMALS=18
 MERCHANT_MOE_TOKEN_OUT_DECIMALS=18
 MERCHANT_MOE_REFERENCE_SOURCE=none
@@ -279,6 +285,16 @@ npm run readiness:merchant-moe
 ```
 
 The readiness report computes `minOutWei` from `MERCHANT_MOE_SLIPPAGE_BPS`, checks the quote/reference deviation, records whether a fork RPC is configured, and still blocks execution because Merchant Moe calldata generation is intentionally disabled until fork tests are added.
+
+To produce the mainnet-fork simulation gate report:
+
+```bash
+cd agent
+set -a && source ../.env && set +a
+npm run simulate:merchant-moe-fork
+```
+
+The simulation command reuses the Merchant Moe quote/readiness path, then checks whether fork simulation can run. Set `MANTLE_MAINNET_FORK_RPC_URL` or `MERCHANT_MOE_FORK_RPC_URL`, `MERCHANT_MOE_ENABLE_FORK_SIMULATION=true`, `MERCHANT_MOE_SIMULATION_FROM`, and `MERCHANT_MOE_SWAP_CALLDATA` to attempt a fork-only call. `MERCHANT_MOE_SIMULATION_MODE=router-call` simulates a direct LBRouter call; `vault-execute` simulates `AgentVault.execute` on a fork where `MERCHANT_MOE_SIMULATION_VAULT` exists. The command writes `merchant_moe.fork_simulation` JSONL evidence and never submits a transaction.
 
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 
@@ -333,7 +349,7 @@ npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
 
 If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
-The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels.
+The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels.
 
 Merchant Moe references:
 

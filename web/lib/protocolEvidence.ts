@@ -44,7 +44,7 @@ interface TraceEvent {
   type?: string;
   protocolId?: string;
   mode?: string;
-  report?: MerchantMoeForkReport;
+  report?: MerchantMoeForkReport | MerchantMoeForkSimulationReport;
   quote?: MerchantMoeQuote;
   risk?: MerchantMoeQuoteRisk;
   executionEnabled?: boolean;
@@ -93,7 +93,42 @@ interface MerchantMoeForkReport {
   nextSteps?: string[];
 }
 
+interface MerchantMoeForkSimulationReport {
+  ok?: boolean;
+  executionEnabled?: boolean;
+  forkRpcConfigured?: boolean;
+  forkSimulationEnabled?: boolean;
+  simulationAttempted?: boolean;
+  simulationPassed?: boolean;
+  simulationMode?: string;
+  target?: string;
+  from?: string;
+  vault?: string;
+  valueWei?: string | number;
+  calldataBytes?: number;
+  route?: string[];
+  amountIn?: string | number;
+  expectedOutWei?: string | number;
+  minOutWei?: string | number;
+  slippageBps?: string | number;
+  quoteRisk?: MerchantMoeQuoteRisk;
+  simulation?: {
+    ok?: boolean;
+    gasEstimate?: string | number;
+    reason?: string;
+    revertReason?: string;
+    warnings?: string[];
+  };
+  findings?: Array<{
+    ruleId?: string;
+    severity?: string;
+    reason?: string;
+  }>;
+  nextSteps?: string[];
+}
+
 const readinessCommand = "cd agent && npm run readiness:merchant-moe";
+const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -165,7 +200,13 @@ async function readTraceArtifact(paths: readonly string[]): Promise<TraceArtifac
 function latestMerchantMoeEvent(events: readonly TraceEvent[]): TraceEvent | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
-    if (event.type === "merchant_moe.fork_readiness" || event.type === "merchant_moe.quote_smoke") return event;
+    if (
+      event.type === "merchant_moe.fork_simulation" ||
+      event.type === "merchant_moe.fork_readiness" ||
+      event.type === "merchant_moe.quote_smoke"
+    ) {
+      return event;
+    }
   }
   return undefined;
 }
@@ -203,7 +244,13 @@ function forkReadinessStatus(report: MerchantMoeForkReport): ProtocolEvidenceSta
   return blockers.some((blocker) => blocker.severity === "critical") ? "bad" : "warn";
 }
 
-function findingLabel(blocker: NonNullable<MerchantMoeForkReport["blockers"]>[number]): string {
+function forkSimulationStatus(report: MerchantMoeForkSimulationReport): ProtocolEvidenceStatus {
+  if (report.simulationPassed && report.ok) return "ok";
+  const findings = report.findings ?? [];
+  return findings.some((finding) => finding.severity === "critical" || finding.severity === "blocker") ? "bad" : "warn";
+}
+
+function findingLabel(blocker: { ruleId?: string; severity?: string; reason?: string }): string {
   const severity = blocker.severity ? `[${blocker.severity}] ` : "";
   const rule = blocker.ruleId ?? "BLOCKER";
   return `${severity}${rule}: ${blocker.reason ?? "review readiness report"}`;
@@ -247,7 +294,7 @@ function noMerchantEvent(root: string, artifact: TraceArtifact): ProtocolEvidenc
 }
 
 function forkReadinessItem(root: string, artifact: TraceArtifact, event: TraceEvent): ProtocolEvidenceItem {
-  const report = event.report ?? {};
+  const report = (event.report ?? {}) as MerchantMoeForkReport;
   const route = report.route ?? [];
   const risk = report.quoteRisk;
   const blockers = report.blockers ?? [];
@@ -276,6 +323,45 @@ function forkReadinessItem(root: string, artifact: TraceArtifact, event: TraceEv
       { label: "Execution", value: report.executionEnabled ? "enabled" : "disabled" },
     ],
     findings: blockers.slice(0, 5).map(findingLabel),
+    nextSteps: (report.nextSteps ?? []).slice(0, 5),
+  };
+}
+
+function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceEvent): ProtocolEvidenceItem {
+  const report = (event.report ?? {}) as MerchantMoeForkSimulationReport;
+  const route = report.route ?? [];
+  const risk = report.quoteRisk;
+  const findings = report.findings ?? [];
+  const status = forkSimulationStatus(report);
+  const revertReason = report.simulation?.revertReason ?? report.simulation?.reason;
+
+  return {
+    id: "merchant-moe-evidence",
+    name: "Merchant Moe",
+    description: "Mainnet-fork simulation",
+    status,
+    label: report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
+    detail: `${routeLabel(route)}. Fork simulation ${
+      report.simulationAttempted ? (report.simulationPassed ? "passed" : "failed") : "has not run"
+    }; quote risk is ${risk?.status ?? "unchecked"}: ${risk?.reason ?? "no risk reason captured"}.`,
+    command: simulationCommand,
+    artifactPath: displayPath(root, artifact.path),
+    updatedAt: event.ts ?? artifact.updatedAt,
+    route,
+    metrics: [
+      { label: "Mode", value: text(report.simulationMode) },
+      { label: "Attempted", value: yesNo(report.simulationAttempted) },
+      { label: "Passed", value: yesNo(report.simulationPassed) },
+      { label: "Gas", value: text(report.simulation?.gasEstimate) },
+      { label: "Calldata bytes", value: text(report.calldataBytes) },
+      { label: "Fork RPC", value: yesNo(report.forkRpcConfigured) },
+      { label: "Min out", value: text(report.minOutWei) },
+      { label: "Slippage bps", value: text(report.slippageBps) },
+    ],
+    findings: [
+      ...findings.slice(0, 5).map(findingLabel),
+      ...(revertReason ? [`Revert: ${revertReason}`] : []),
+    ],
     nextSteps: (report.nextSteps ?? []).slice(0, 5),
   };
 }
@@ -313,6 +399,7 @@ function merchantMoeItem(root: string, artifact: TraceArtifact | MissingTraceArt
   if (!("events" in artifact)) return missingItem(root, artifact);
   const event = latestMerchantMoeEvent(artifact.events);
   if (!event) return noMerchantEvent(root, artifact);
+  if (event.type === "merchant_moe.fork_simulation") return forkSimulationItem(root, artifact, event);
   if (event.type === "merchant_moe.fork_readiness") return forkReadinessItem(root, artifact, event);
   return quoteSmokeItem(root, artifact, event);
 }

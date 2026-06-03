@@ -12,9 +12,16 @@ Add a preflight simulation layer before every transaction. The agent should not 
 
 Implemented v1 now gates `submitExecute()` with a preflight simulation before `writeContract`. The AI runner and deterministic baseline runner both compute a simulation result, pass it into risk evaluation, and pass the same result into submission so a failed simulation cannot accidentally proceed.
 
-Execution plans now carry normalized `expectedOutWei`, `minOutWei`, `slippageBps`, and optional `deadlineSeconds` metadata. Merchant Moe has a fork-readiness CLI that verifies quote/slippage/reference/fork preconditions while keeping execution disabled.
+Execution plans now carry normalized `expectedOutWei`, `minOutWei`, `slippageBps`, and optional `deadlineSeconds` metadata. Merchant Moe has readiness and fork-simulation CLIs that verify quote/slippage/reference/fork preconditions while keeping execution disabled.
 
-The remaining next steps are richer gas/cost reporting, dashboard surfacing, and actual mainnet-fork protocol simulations for real adapters once calldata generation exists.
+Implemented fork simulation v1:
+
+- `npm run simulate:merchant-moe-fork` writes `merchant_moe.fork_simulation` JSONL evidence.
+- The command blocks until a fork RPC, simulation account, and swap calldata fixture are configured.
+- When calldata is provided, it can simulate a direct LBRouter call or `AgentVault.execute` on a fork where the vault exists.
+- It records attempted/passed status, gas estimate, revert reason, blockers, and next steps without submitting transactions.
+
+The remaining next steps are safe LBRouter calldata generation, richer gas/cost reporting, and regression fixtures for failed slippage/stale oracle cases.
 
 ## Real Problems It Solves
 
@@ -84,6 +91,7 @@ AI intent
 - Unit tests cover successful simulations, gas-estimate warnings, failed simulations, and submit blocking.
 - Simulation result is included in local risk evaluation. Structured decision-log persistence remains future work.
 - Merchant Moe fork readiness reports min-output/slippage metadata and blocks execution while calldata remains disabled. Implemented.
+- Merchant Moe fork simulation reports fork RPC/call-precondition status and can simulate provided calldata without live submission. Implemented.
 
 ## Resources
 
