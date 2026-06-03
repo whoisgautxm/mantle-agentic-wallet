@@ -54,6 +54,52 @@ interface TraceSummary {
   }>;
 }
 
+interface OpenAiReplaySummary {
+  ok?: boolean;
+  mode?: string;
+  model?: string;
+  generatedAt?: string;
+  replay?: {
+    totalEvents?: number;
+    totalTicks?: number;
+    runners?: Array<{
+      runner?: string;
+      ticks?: number;
+      executed?: number;
+      blocked?: number;
+      held?: number;
+    }>;
+    protocolSignals?: Array<{
+      status?: string;
+      blocker?: string;
+    }>;
+  };
+  modelReport?: {
+    verdict?: "pass" | "watch" | "fail";
+    overallScore?: number;
+    safetyScore?: number;
+    decisionQualityScore?: number;
+    evidenceQualityScore?: number;
+    aiVsBaselineScore?: number;
+    summary?: string;
+    aiVsBaseline?: {
+      winner?: string;
+      rationale?: string;
+    };
+    findings?: Array<{
+      severity?: string;
+      ruleId?: string;
+      message?: string;
+    }>;
+    nextActions?: string[];
+  };
+  findings?: Array<{
+    severity?: string;
+    ruleId?: string;
+    message?: string;
+  }>;
+}
+
 interface Artifact<T> {
   data: T;
   path: string;
@@ -117,6 +163,13 @@ function traceCandidates(root: string): string[] {
   return configured
     ? [agentPath(root, configured)]
     : [path.join(root, "agent", "traces", "trace-summary.json"), path.join(root, "agent", "traces", "summary.json")];
+}
+
+function openAiReplayCandidates(root: string): string[] {
+  const configured = process.env.OPENAI_REPLAY_EVAL_OUTPUT?.trim();
+  return configured
+    ? [agentPath(root, configured)]
+    : [path.join(root, "agent", "traces", "openai-replay-eval.json")];
 }
 
 function artifactProblem(root: string, artifact: MissingArtifact): Pick<EvalReadinessItem, "artifactPath" | "detail" | "findings"> {
@@ -228,8 +281,61 @@ async function traceItem(root: string): Promise<EvalReadinessItem> {
   };
 }
 
+function verdictStatus(summary: OpenAiReplaySummary): EvalReadinessStatus {
+  if (summary.ok && summary.modelReport?.verdict === "pass") return "ok";
+  if (summary.modelReport?.verdict === "fail" || summary.ok === false) return "bad";
+  return "warn";
+}
+
+async function openAiReplayItem(root: string): Promise<EvalReadinessItem> {
+  const artifact = await readJsonArtifact<OpenAiReplaySummary>(openAiReplayCandidates(root));
+  const command = "cd agent && npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eval.json";
+
+  if (!("data" in artifact)) {
+    const problem = artifactProblem(root, artifact);
+    return {
+      id: "openai-replay-evals",
+      name: "OpenAI replay eval",
+      description: "Model-backed agent benchmark",
+      status: artifact.error ? "bad" : "warn",
+      label: artifact.error ? "Invalid" : "Not generated",
+      detail: problem.detail,
+      command,
+      artifactPath: problem.artifactPath,
+      metrics: [],
+      findings: problem.findings,
+    };
+  }
+
+  const modelReport = artifact.data.modelReport ?? {};
+  const findings = artifact.data.findings ?? modelReport.findings ?? [];
+  const runners = artifact.data.replay?.runners ?? [];
+  const winner = modelReport.aiVsBaseline?.winner ?? "n/a";
+
+  return {
+    id: "openai-replay-evals",
+    name: "OpenAI replay eval",
+    description: "Model-backed agent benchmark",
+    status: verdictStatus(artifact.data),
+    label: modelReport.verdict === "pass" ? "Passing" : modelReport.verdict === "fail" ? "Failing" : "Watch",
+    detail: modelReport.summary ?? `${int(artifact.data.replay?.totalTicks)} replay tick(s) judged by ${artifact.data.model ?? "OpenAI"}.`,
+    command,
+    artifactPath: displayPath(root, artifact.path),
+    updatedAt: artifact.data.generatedAt ?? artifact.updatedAt,
+    metrics: [
+      { label: "Overall", value: int(modelReport.overallScore).toString() },
+      { label: "Safety", value: int(modelReport.safetyScore).toString() },
+      { label: "Decision", value: int(modelReport.decisionQualityScore).toString() },
+      { label: "Evidence", value: int(modelReport.evidenceQualityScore).toString() },
+      { label: "Winner", value: winner },
+      { label: "Runners", value: runners.length.toString() },
+    ],
+    findings: findings.slice(0, 4).map((finding) => `${finding.ruleId ?? finding.severity ?? "finding"} - ${finding.message ?? "review report"}`),
+  };
+}
+
 export async function getEvalReadiness(): Promise<EvalReadiness> {
   const root = workspaceRoot();
-  const [scenarios, traces] = await Promise.all([scenarioItem(root), traceItem(root)]);
-  return { items: [scenarios, traces] };
+  const [scenarios, traces, openAiReplay] = await Promise.all([scenarioItem(root), traceItem(root), openAiReplayItem(root)]);
+  return { items: [scenarios, traces, openAiReplay] };
 }

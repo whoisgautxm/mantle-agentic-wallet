@@ -16,11 +16,12 @@ Implemented v1:
 
 - `npm run eval:traces` reads a trace JSONL file.
 - `npm run eval:scenarios` runs deterministic risk scenarios without RPC, private keys, or model calls.
+- `npm run eval:openai-replay` runs an OpenAI model-backed replay judge against real JSONL traces.
 - It grades whether executed ticks had passing risk and simulation results.
 - It verifies failed risk/simulation outcomes do not execute.
 - It flags stale-oracle execution.
 - It can write a JSON summary for reports and dashboards.
-- The dashboard reads trace/scenario summary JSON artifacts and shows replay benchmark status.
+- The dashboard reads trace, scenario, and OpenAI replay summary JSON artifacts and shows replay benchmark status.
 
 The next step is scenario-based behavioral evaluation:
 
@@ -85,7 +86,15 @@ Use OpenAI tracing or an eval harness to record:
 - final submitted transaction or hold
 - outcome vs baseline
 
-The OpenAI Agents SDK has built-in tracing for model generations, tool calls, guardrails, handoffs, and custom events. OpenAI agent evals support traces, graders, datasets, and eval runs for improving workflow quality.
+Implemented OpenAI replay eval v1:
+
+- Reads `agent/traces/agent-events.jsonl`.
+- Summarizes AI and baseline ticks, final actions, oracle freshness, risk, simulation, gas, and protocol-readiness signals.
+- Calls an OpenAI judge model with structured JSON output.
+- Writes `agent/traces/openai-replay-eval.json`.
+- Scores safety, decision quality, evidence quality, and AI-vs-baseline performance.
+
+The OpenAI Agents SDK has built-in tracing for model generations, tool calls, guardrails, handoffs, and custom events. OpenAI agent evals support traces, graders, datasets, and eval runs for improving workflow quality. The current project uses a code-first replay judge first; hosted trace grading/datasets can be added once the real-agent trace set is larger.
 
 ## Suggested Metrics
 
@@ -103,14 +112,15 @@ The OpenAI Agents SDK has built-in tracing for model generations, tool calls, gu
 ## Acceptance Criteria
 
 - `npm run eval:traces` grades replayed JSONL traces. Implemented.
+- `npm run eval:openai-replay` grades replayed JSONL traces with a real OpenAI judge model. Implemented.
 - A failed risk rule can be graded as a success if the agent was blocked safely.
-- Results can be written to JSON for the dashboard/report. Implemented for trace and scenario summaries.
-- The dashboard exposes eval artifact status, pass/fail metrics, and top findings. Implemented.
+- Results can be written to JSON for the dashboard/report. Implemented for trace, scenario, and OpenAI replay summaries.
+- The dashboard exposes eval artifact status, pass/fail metrics, model-backed scores, and top findings. Implemented.
 - Prompt/model changes can be compared run-to-run once model-in-the-loop scenarios are added.
 
 ## Resources
 
-- OpenAI agent evals: https://platform.openai.com/docs/guides/agent-evals
-- OpenAI evals guide: https://platform.openai.com/docs/guides/evals
+- OpenAI agent evals: https://developers.openai.com/api/docs/guides/agent-evals
+- OpenAI evals guide: https://developers.openai.com/api/docs/guides/evals
 - OpenAI Agents SDK tracing: https://openai.github.io/openai-agents-js/guides/tracing/
-- OpenAI Structured Outputs: https://platform.openai.com/docs/guides/structured-outputs
+- OpenAI Structured Outputs: https://developers.openai.com/api/docs/guides/structured-outputs

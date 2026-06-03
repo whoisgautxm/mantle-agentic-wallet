@@ -349,15 +349,25 @@ npm run eval:scenarios
 
 The default scenario pack covers safe buys, stale oracle blocks, failed simulation blocks, disallowed targets, and oversized trades. Pass a custom scenario directory/output path with `npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json`.
 
+To run a model-backed OpenAI replay judge over the real trace:
+
+```bash
+cd agent
+npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eval.json
+```
+
+This command loads the repo root `.env` and `agent/.env`, summarizes AI/baseline replay ticks plus real-protocol readiness signals, and asks an OpenAI model for a structured report covering safety, decision quality, evidence quality, and AI-vs-baseline performance. Set `OPENAI_EVAL_MODEL` to override the judge model; otherwise it uses `OPENAI_MODEL`.
+
 The dashboard reads these summary artifacts when present:
 
 ```bash
 cd agent
 npm run eval:traces -- traces/agent-events.jsonl traces/trace-summary.json
 npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
+npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eval.json
 ```
 
-If `TRACE_EVAL_OUTPUT` or `SCENARIO_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
+If `TRACE_EVAL_OUTPUT`, `SCENARIO_EVAL_OUTPUT`, or `OPENAI_REPLAY_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
 The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels. The execution preflight feed also replays proposed agent/baseline transactions and Merchant Moe fork simulations with target, selector, value, calldata bytes, simulation pass/fail, gas estimate, revert reason, tx hash, and blocked-execution reason.
 
@@ -461,7 +471,7 @@ The dashboard now includes protocol readiness alongside the replay:
 - Pyth oracle active/standby/fallback state
 - execution simulation gate status
 - ERC20 portfolio and allowance watch configuration
-- eval/readiness cards for JSONL trace replay and deterministic scenario packs
+- eval/readiness cards for JSONL trace replay, deterministic scenario packs, and OpenAI model-backed replay judging
 
 ---
 

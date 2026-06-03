@@ -16,7 +16,8 @@
     "simulate:merchant-moe-fork": "tsx src/merchantMoeForkSimulation.ts",
     "readiness:lending": "tsx src/lendingReadiness.ts",
     "eval:traces": "tsx src/traceEval.ts",
-    "eval:scenarios": "tsx src/scenarioEval.ts"
+    "eval:scenarios": "tsx src/scenarioEval.ts",
+    "eval:openai-replay": "tsx src/openAiReplayEval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
