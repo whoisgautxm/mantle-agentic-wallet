@@ -7,6 +7,10 @@
     "start": "tsx src/agent.ts",
     "keeper": "tsx src/keeper.ts",
     "baseline": "tsx src/baseline.ts",
+    "demo": "tsx src/demoStart.ts",
+    "demo:start": "tsx src/demoStart.ts",
+    "demo:status": "tsx src/demoStatus.ts",
+    "demo:stop": "tsx src/demoStop.ts",
     "quote:merchant-moe": "tsx src/merchantMoeQuoteSmoke.ts",
     "eval:traces": "tsx src/traceEval.ts",
     "eval:scenarios": "tsx src/scenarioEval.ts"

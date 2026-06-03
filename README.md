@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-84%2F84-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-92%2F92-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
@@ -181,7 +181,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 84 passing |
+| Agent | `cd agent && npm test` | 92 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -206,6 +206,9 @@ ANTHROPIC_MODEL=claude-sonnet-4-6
 AGENT_INTERVAL_MS=120000
 BASELINE_INTERVAL_MS=60000
 KEEPER_INTERVAL_MS=45000
+DEMO_DASHBOARD_PORT=3000
+DEMO_RUN_SCENARIO_EVAL=true
+DEMO_RUN_TRACE_EVAL_ON_STOP=true
 RISK_MAX_DEX_ORACLE_DEVIATION_BPS=300
 RISK_MAX_POSITION_BPS=7000
 RISK_MAX_TRADE_VALUE_BPS=2500
@@ -334,6 +337,29 @@ Copy the printed values into `shared/addresses.json`:
 ---
 
 ## Running the Live Demo
+
+### One-Command Demo
+
+The safest demo path is the orchestrator. It starts exactly one keeper, one AI runner, one baseline runner, and one dashboard, then cleans them up on `Ctrl-C`.
+
+```bash
+cd agent
+npm run demo
+```
+
+Useful variants:
+
+```bash
+npm run demo -- --port 4000
+npm run demo -- --no-agent
+npm run demo -- --no-baseline
+npm run demo:status
+npm run demo:stop
+```
+
+`npm run demo` writes PID records to `.runtime/`, generates `traces/scenario-summary.json` on start, and generates `traces/trace-summary.json` on shutdown when `traces/agent-events.jsonl` exists. Those summary files are what the dashboard's replay benchmark panel reads.
+
+### Manual Terminals
 
 Use separate terminals from the repo root:
 

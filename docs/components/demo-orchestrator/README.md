@@ -10,7 +10,16 @@ Provide one command that starts, monitors, and stops the full local demo loop wi
 
 ## Current Project Fit
 
-The current demo uses separate terminals:
+Implemented v1 adds `agent` package scripts:
+
+- `npm run demo`
+- `npm run demo:start`
+- `npm run demo:status`
+- `npm run demo:stop`
+
+The orchestrator starts keeper, AI runner, baseline runner, and dashboard with prefixed logs, PID records, duplicate protection, graceful shutdown, and eval summary generation.
+
+The manual fallback still uses separate terminals:
 
 - `npm run keeper`
 - `npm start`
@@ -34,23 +43,20 @@ This works, but it is easy to accidentally run duplicate agents or baseline loop
 Add:
 
 ```text
-scripts/
-  demo-runner.ts
-  demo-stop.ts
-  demo-status.ts
-
-agent/src/runtime/
-  lockfile.ts
-  heartbeat.ts
+agent/src/demoStart.ts
+agent/src/demoStop.ts
+agent/src/demoStatus.ts
+agent/src/runtime/demoRuntime.ts
 ```
 
 Package scripts:
 
 ```json
 {
-  "demo:start": "tsx scripts/demo-runner.ts",
-  "demo:stop": "tsx scripts/demo-stop.ts",
-  "demo:status": "tsx scripts/demo-status.ts"
+  "demo": "tsx src/demoStart.ts",
+  "demo:start": "tsx src/demoStart.ts",
+  "demo:stop": "tsx src/demoStop.ts",
+  "demo:status": "tsx src/demoStatus.ts"
 }
 ```
 
@@ -58,20 +64,27 @@ Package scripts:
 
 - Reads `.env` once.
 - Starts keeper, agent, baseline, and dashboard.
-- Writes PID files to `.runtime/`.
+- Writes PID files to `.runtime/`. Implemented.
 - Refuses to start duplicate components.
 - Streams logs with component prefixes.
-- Performs health checks.
+- Performs dashboard TCP readiness checks.
 - Stops all project processes safely.
-- Supports `--no-baseline`, `--no-agent`, `--prod-dashboard`, and `--port`.
+- Supports `--no-baseline`, `--no-agent`, `--no-keeper`, `--no-dashboard`, `--prod-dashboard`, `--port`, `--skip-scenario-eval`, `--no-trace-eval`, and `--fresh-trace`.
+- Generates scenario eval summary on start and trace eval summary on shutdown for dashboard replay cards.
 
 ## Acceptance Criteria
 
-- `npm run demo:start` starts exactly one of each process.
-- `npm run demo:status` shows port, PID, and last heartbeat.
-- `npm run demo:stop` stops all project demo processes.
-- Duplicate startup is blocked with a clear message.
+- `npm run demo:start` starts exactly one of each process. Implemented.
+- `npm run demo:status` shows port, PID, and last heartbeat. Implemented.
+- `npm run demo:stop` stops all project demo processes. Implemented.
+- Duplicate startup is blocked with a clear message. Implemented.
 - No secrets are printed.
+
+Remaining improvements:
+
+- File heartbeat events from the individual runner loops, not just the orchestrator process.
+- Dashboard operations panel for runner PID/heartbeat status.
+- Optional background daemon mode if a foreground terminal is not desired.
 
 ## Resources
 

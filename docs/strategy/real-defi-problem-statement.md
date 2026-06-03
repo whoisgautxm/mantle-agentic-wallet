@@ -178,6 +178,7 @@ Status: mostly implemented.
 - Pyth/Merchant Moe read-only statuses.
 - Simulation gate visibility.
 - Allowance watch readiness.
+- Demo orchestrator starts/stops the local keeper, AI, baseline, dashboard, and eval summaries with duplicate-process protection.
 
 ### Phase B: Real Quotes, No Execution
 
