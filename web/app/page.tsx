@@ -6,6 +6,7 @@ import LendingReadinessPanel from "./components/LendingReadinessPanel";
 import OraclePanel from "./components/OraclePanel";
 import PortfolioPanel from "./components/PortfolioPanel";
 import ProtocolEvidencePanel from "./components/ProtocolEvidencePanel";
+import ProtocolGatePanel from "./components/ProtocolGatePanel";
 import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
 import SimulationFeedPanel from "./components/SimulationFeedPanel";
@@ -15,6 +16,7 @@ import { getEvalReadiness } from "../lib/evalReadiness";
 import { getLendingEvidence } from "../lib/lendingEvidence";
 import { getPortfolioStatus } from "../lib/portfolio";
 import { getProtocolEvidence } from "../lib/protocolEvidence";
+import { getProtocolGate } from "../lib/protocolGate";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
 import { getSimulationFeed } from "../lib/simulationFeed";
 import { getLiveStatus } from "../lib/status";
@@ -69,6 +71,7 @@ export default async function Page() {
   ]);
   const protocolReadiness = getProtocolReadiness(liveStatus, portfolioStatus);
   const protocolEvidence = await getProtocolEvidence();
+  const protocolGate = await getProtocolGate();
   const simulationFeed = await getSimulationFeed();
   const lendingEvidence = await getLendingEvidence();
   const evalReadiness = await getEvalReadiness();
@@ -129,6 +132,10 @@ export default async function Page() {
 
       <section className="insights single">
         <ProtocolEvidencePanel evidence={protocolEvidence} />
+      </section>
+
+      <section className="insights single">
+        <ProtocolGatePanel gate={protocolGate} />
       </section>
 
       <section className="insights single">

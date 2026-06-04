@@ -348,6 +348,170 @@ h2 {
   border-left-color: rgba(216, 164, 71, 0.72);
 }
 
+.protocol-gate {
+  position: relative;
+  overflow: hidden;
+}
+
+.protocol-gate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 8% 22%, rgba(85, 208, 138, 0.12), transparent 24rem),
+    radial-gradient(circle at 96% 0%, rgba(114, 168, 255, 0.11), transparent 25rem);
+}
+
+.protocol-gate > * {
+  position: relative;
+}
+
+.gate-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.85fr);
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.gate-hero > div,
+.gate-explainer > div {
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 20px;
+  background: rgba(10, 8, 5, 0.36);
+  padding: 15px;
+}
+
+.gate-hero strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 1.2rem;
+}
+
+.gate-hero span,
+.gate-explainer span {
+  color: var(--gold);
+  font-family: "Courier New", monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gate-hero p,
+.gate-explainer p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.gate-rail {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.gate-step {
+  min-height: 180px;
+  border: 1px solid rgba(255, 247, 231, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 231, 0.06), transparent 42%),
+    rgba(10, 8, 5, 0.36);
+  padding: 12px;
+}
+
+.gate-step.ok {
+  border-color: rgba(85, 208, 138, 0.28);
+  background:
+    linear-gradient(180deg, rgba(85, 208, 138, 0.12), transparent 44%),
+    rgba(10, 8, 5, 0.36);
+}
+
+.gate-step.warn {
+  border-color: rgba(216, 164, 71, 0.3);
+}
+
+.gate-step.bad {
+  border-color: rgba(255, 118, 118, 0.34);
+  background:
+    linear-gradient(180deg, rgba(255, 118, 118, 0.13), transparent 44%),
+    rgba(10, 8, 5, 0.36);
+}
+
+.gate-step span {
+  display: inline-flex;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  padding: 4px 7px;
+  font-family: "Courier New", monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.gate-step.ok span {
+  color: var(--green);
+  background: rgba(85, 208, 138, 0.1);
+}
+
+.gate-step.warn span {
+  color: var(--gold);
+  background: rgba(216, 164, 71, 0.1);
+}
+
+.gate-step.bad span {
+  color: #ff8c8c;
+  background: rgba(255, 118, 118, 0.11);
+}
+
+.gate-step strong,
+.gate-step em {
+  display: block;
+}
+
+.gate-step em {
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.gate-step p {
+  margin: 12px 0 0;
+  color: #d6cab3;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.gate-metrics {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.gate-explainer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 12px;
+}
+
+.gate-findings {
+  margin-bottom: 0;
+}
+
+.protocol-gate code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 10px;
+  border: 1px solid rgba(85, 208, 138, 0.22);
+  border-radius: 14px;
+  background: rgba(85, 208, 138, 0.06);
+  color: #daf8e6;
+  padding: 10px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+}
+
 .simulation-feed-grid {
   grid-template-columns: 1fr;
   margin-top: 14px;
@@ -564,6 +728,9 @@ h2 {
   .metric-grid,
   .eval-grid,
   .eval-metrics,
+  .gate-hero,
+  .gate-rail,
+  .gate-explainer,
   .simulation-tx,
   .simulation-blockers,
   .risk-row,
@@ -571,6 +738,10 @@ h2 {
   .table-head,
   .table-row {
     grid-template-columns: 1fr;
+  }
+
+  .gate-step {
+    min-height: auto;
   }
 
   .section-head {
