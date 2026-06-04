@@ -1,6 +1,7 @@
 import { mkdtemp, readFile } from "fs/promises";
 import os from "os";
 import path from "path";
+import { decodeFunctionData } from "viem";
 import { describe, expect, it } from "vitest";
 import {
   buildMerchantMoeForkSimulationReport,
@@ -11,6 +12,7 @@ import {
 } from "./merchantMoeForkSimulation.js";
 import { buildMerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
 import { parseMerchantMoeQuoteSmokeConfig } from "./merchantMoeQuoteSmoke.js";
+import { LB_ROUTER_SWAP_ABI } from "./protocols/merchantMoeCalldata.js";
 import type { MerchantMoeQuote } from "./protocols/merchantMoeReadOnlyAdapter.js";
 import { createJsonlTraceWriter } from "./tracing.js";
 
@@ -87,7 +89,53 @@ describe("Merchant Moe fork simulation", () => {
     expect(report.simulationPassed).toBe(true);
     expect(report.simulation?.gasEstimate).toBe(12_345n);
     expect(report.target).toBe(router);
+    expect(report.calldataSource).toBe("env");
     expect(calls).toHaveLength(1);
+  });
+
+  it("auto-builds fork-only LBRouter calldata from quote metadata", async () => {
+    const calls: unknown[] = [];
+    const client: ForkSimulationClient = {
+      async call(args) {
+        calls.push(args);
+        return { data: "0x1234" };
+      },
+      async estimateGas() {
+        return 12_345n;
+      },
+    };
+
+    const report = await buildMerchantMoeForkSimulationReport(
+      await readiness({
+        MERCHANT_MOE_SLIPPAGE_BPS: "100",
+        MERCHANT_MOE_DEADLINE_SECONDS: "1200",
+      }),
+      loadMerchantMoeForkSimulationConfig({
+        MERCHANT_MOE_ENABLE_FORK_SIMULATION: "true",
+        MERCHANT_MOE_FORK_RPC_URL: "http://127.0.0.1:8545",
+        MERCHANT_MOE_SIMULATION_FROM: from,
+      }),
+      client,
+      quote,
+    );
+
+    const routerCall = calls[0] as { data: `0x${string}`; to: `0x${string}` };
+    const decoded = decodeFunctionData({ abi: LB_ROUTER_SWAP_ABI, data: routerCall.data });
+    expect(report.ok).toBe(true);
+    expect(report.calldataSource).toBe("auto");
+    expect(report.recipient).toBe(from);
+    expect(report.calldataBytes).toBeGreaterThan(4);
+    expect(report.findings.map((finding) => finding.ruleId)).not.toContain("CALLDATA_MISSING");
+    expect(routerCall.to).toBe(router);
+    expect(decoded.functionName).toBe("swapExactTokensForTokens");
+    expect(decoded.args[0]).toBe(1000n);
+    expect(decoded.args[1]).toBe(891n);
+    expect(decoded.args[2]).toEqual({
+      pairBinSteps: [25n],
+      versions: [3],
+      tokenPath: [tokenA, tokenB],
+    });
+    expect(decoded.args[3]).toBe(from);
   });
 
   it("records simulation failures as blockers", async () => {

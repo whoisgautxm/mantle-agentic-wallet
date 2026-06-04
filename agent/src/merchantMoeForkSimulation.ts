@@ -4,6 +4,7 @@ import { mantle } from "viem/chains";
 import { pathToFileURL } from "url";
 import { buildMerchantMoeForkReadinessReport, type MerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
 import { parseMerchantMoeQuoteSmokeConfig, type MerchantMoeQuoteSmokeConfig } from "./merchantMoeQuoteSmoke.js";
+import { buildMerchantMoeSwapExactTokensForTokensCalldata } from "./protocols/merchantMoeCalldata.js";
 import {
   MERCHANT_MOE_MANTLE,
   createMerchantMoePublicClient,
@@ -18,8 +19,10 @@ import { VAULT_ABI } from "./vault.js";
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const HEX_RE = /^0x[a-fA-F0-9]*$/;
+const DEFAULT_DEADLINE_SECONDS = 1_200n;
 
 export type MerchantMoeForkSimulationMode = "router-call" | "vault-execute";
+export type MerchantMoeForkSimulationCalldataSource = "env" | "auto" | "missing" | "build-error";
 
 export interface MerchantMoeForkSimulationConfig {
   forkRpcUrl?: string;
@@ -29,6 +32,10 @@ export interface MerchantMoeForkSimulationConfig {
   from?: `0x${string}`;
   vault?: `0x${string}`;
   calldata?: `0x${string}`;
+  calldataSource: MerchantMoeForkSimulationCalldataSource;
+  calldataBuildError?: string;
+  recipient?: `0x${string}`;
+  deadline?: bigint;
   valueWei: bigint;
   rationale: string;
 }
@@ -39,6 +46,7 @@ export interface MerchantMoeForkSimulationFinding {
     | "FORK_SIMULATION_DISABLED"
     | "SIMULATION_FROM_MISSING"
     | "CALLDATA_MISSING"
+    | "CALLDATA_BUILD_FAILED"
     | "VAULT_MISSING"
     | "QUOTE_RISK_BLOCKED"
     | "SIMULATION_FAILED"
@@ -61,6 +69,9 @@ export interface MerchantMoeForkSimulationReport {
   from?: `0x${string}`;
   vault?: `0x${string}`;
   target: `0x${string}`;
+  calldataSource: MerchantMoeForkSimulationCalldataSource;
+  recipient?: `0x${string}`;
+  deadline?: string;
   valueWei: string;
   calldataBytes: number;
   route: `0x${string}`[];
@@ -100,6 +111,14 @@ function parseWei(raw: string | undefined, label: string, fallback = 0n): bigint
   return BigInt(raw.trim());
 }
 
+function parseOptionalPositiveInteger(raw: string | undefined, label: string): bigint | undefined {
+  if (!raw?.trim()) return undefined;
+  if (!/^\d+$/.test(raw.trim())) throw new Error(`${label} must be a positive integer`);
+  const value = BigInt(raw.trim());
+  if (value <= 0n) throw new Error(`${label} must be positive`);
+  return value;
+}
+
 function forkRpcUrl(env: NodeJS.ProcessEnv): string | undefined {
   return env.MERCHANT_MOE_FORK_RPC_URL?.trim() || env.MANTLE_MAINNET_FORK_RPC_URL?.trim();
 }
@@ -113,6 +132,7 @@ function parseMode(env: NodeJS.ProcessEnv, vault: `0x${string}` | undefined): Me
 
 export function loadMerchantMoeForkSimulationConfig(env = process.env): MerchantMoeForkSimulationConfig {
   const vault = asAddress(env.MERCHANT_MOE_SIMULATION_VAULT, "MERCHANT_MOE_SIMULATION_VAULT");
+  const calldata = asCalldata(env.MERCHANT_MOE_SWAP_CALLDATA, "MERCHANT_MOE_SWAP_CALLDATA");
   return {
     forkRpcUrl: forkRpcUrl(env),
     forkSimulationEnabled: env.MERCHANT_MOE_ENABLE_FORK_SIMULATION === "true",
@@ -120,10 +140,74 @@ export function loadMerchantMoeForkSimulationConfig(env = process.env): Merchant
     router: asAddress(env.MERCHANT_MOE_LB_ROUTER ?? MERCHANT_MOE_MANTLE.lbRouter, "MERCHANT_MOE_LB_ROUTER")!,
     from: asAddress(env.MERCHANT_MOE_SIMULATION_FROM, "MERCHANT_MOE_SIMULATION_FROM"),
     vault,
-    calldata: asCalldata(env.MERCHANT_MOE_SWAP_CALLDATA, "MERCHANT_MOE_SWAP_CALLDATA"),
+    calldata,
+    calldataSource: calldata ? "env" : "missing",
+    recipient: asAddress(env.MERCHANT_MOE_SWAP_RECIPIENT, "MERCHANT_MOE_SWAP_RECIPIENT"),
+    deadline: parseOptionalPositiveInteger(env.MERCHANT_MOE_SWAP_DEADLINE, "MERCHANT_MOE_SWAP_DEADLINE"),
     valueWei: parseWei(env.MERCHANT_MOE_SIMULATION_VALUE_WEI, "MERCHANT_MOE_SIMULATION_VALUE_WEI"),
     rationale: env.MERCHANT_MOE_SIMULATION_RATIONALE ?? "Merchant Moe mainnet-fork simulation",
   };
+}
+
+function parseReadinessBigint(raw: string | undefined, label: string): bigint {
+  if (!raw || !/^\d+$/.test(raw)) throw new Error(`${label} must be a non-negative integer`);
+  return BigInt(raw);
+}
+
+function deadlineSeconds(readiness: MerchantMoeForkReadinessReport): bigint {
+  if (!readiness.deadlineSeconds) return DEFAULT_DEADLINE_SECONDS;
+  const parsed = parseReadinessBigint(readiness.deadlineSeconds, "deadlineSeconds");
+  return parsed > 0n ? parsed : DEFAULT_DEADLINE_SECONDS;
+}
+
+function nowUnixSeconds(): bigint {
+  return BigInt(Math.floor(Date.now() / 1_000));
+}
+
+function autoRecipient(config: MerchantMoeForkSimulationConfig): `0x${string}` | undefined {
+  if (config.recipient) return config.recipient;
+  return config.mode === "vault-execute" ? config.vault : config.from;
+}
+
+function withAutoCalldata(
+  readiness: MerchantMoeForkReadinessReport,
+  config: MerchantMoeForkSimulationConfig,
+  quote?: MerchantMoeQuote,
+): MerchantMoeForkSimulationConfig {
+  if (config.calldata || !quote) return config;
+
+  const recipient = autoRecipient(config);
+  if (!recipient) return config;
+
+  try {
+    const amountIn = parseReadinessBigint(readiness.amountIn, "amountIn");
+    const amountOutMin = parseReadinessBigint(readiness.minOutWei, "minOutWei");
+    const deadline = config.deadline ?? nowUnixSeconds() + deadlineSeconds(readiness);
+    const calldata = buildMerchantMoeSwapExactTokensForTokensCalldata({
+      amountIn,
+      amountOutMin,
+      tokenPath: quote.route,
+      pairBinSteps: quote.binSteps,
+      versions: quote.versions,
+      recipient,
+      deadline,
+    });
+
+    return {
+      ...config,
+      calldata,
+      calldataSource: "auto",
+      recipient,
+      deadline,
+    };
+  } catch (error) {
+    return {
+      ...config,
+      calldataSource: "build-error",
+      calldataBuildError: errorReason(error),
+      recipient,
+    };
+  }
 }
 
 function calldataBytes(calldata: `0x${string}` | undefined): number {
@@ -168,11 +252,18 @@ function baseFindings(
       reason: "Set MERCHANT_MOE_SIMULATION_FROM to the fork account that should simulate the swap.",
     });
   }
-  if (!config.calldata) {
+  if (!config.calldata && !config.calldataBuildError) {
     findings.push({
       ruleId: "CALLDATA_MISSING",
       severity: "blocker",
-      reason: "Set MERCHANT_MOE_SWAP_CALLDATA after a safe LBRouter calldata builder or fixture is available.",
+      reason: "Provide MERCHANT_MOE_SWAP_CALLDATA or enough quote/path metadata for the simulation-only LBRouter calldata builder.",
+    });
+  }
+  if (config.calldataBuildError) {
+    findings.push({
+      ruleId: "CALLDATA_BUILD_FAILED",
+      severity: "blocker",
+      reason: config.calldataBuildError,
     });
   }
   if (config.mode === "vault-execute" && !config.vault) {
@@ -282,7 +373,10 @@ function nextSteps(report: Pick<MerchantMoeForkSimulationReport, "simulationPass
     steps.push("Configure a local/mainnet-fork RPC for Mantle mainnet simulation.");
   }
   if (report.findings.some((finding) => finding.ruleId === "CALLDATA_MISSING")) {
-    steps.push("Add or provide Merchant Moe LBRouter calldata with minOut/deadline before attempting fork simulation.");
+    steps.push("Provide quote path metadata, simulation recipient, and minOut/deadline inputs so calldata can be built safely.");
+  }
+  if (report.findings.some((finding) => finding.ruleId === "CALLDATA_BUILD_FAILED")) {
+    steps.push("Fix the calldata builder input error before attempting fork simulation.");
   }
   if (report.findings.some((finding) => finding.ruleId === "SIMULATION_FROM_MISSING")) {
     steps.push("Choose a fork account/vault-like address with the token balances and approvals needed for the swap.");
@@ -300,18 +394,21 @@ function nextSteps(report: Pick<MerchantMoeForkSimulationReport, "simulationPass
 export async function buildMerchantMoeForkSimulationReport(
   readiness: MerchantMoeForkReadinessReport,
   simulationConfig: MerchantMoeForkSimulationConfig,
-  client: ForkSimulationClient | undefined = createForkClient(simulationConfig),
+  client?: ForkSimulationClient,
+  quote?: MerchantMoeQuote,
 ): Promise<MerchantMoeForkSimulationReport> {
-  const findings = baseFindings(readiness, simulationConfig);
+  const resolvedConfig = withAutoCalldata(readiness, simulationConfig, quote);
+  const activeClient = client ?? createForkClient(resolvedConfig);
+  const findings = baseFindings(readiness, resolvedConfig);
   let simulation: SimulationResult | undefined;
   let simulationAttempted = false;
 
-  if (canAttempt(simulationConfig, findings)) {
+  if (canAttempt(resolvedConfig, findings)) {
     simulationAttempted = true;
     simulation =
-      simulationConfig.mode === "vault-execute"
-        ? await simulateVaultExecute(client!, simulationConfig.router, simulationConfig)
-        : await simulateRouterCall(client!, simulationConfig.router, simulationConfig);
+      resolvedConfig.mode === "vault-execute"
+        ? await simulateVaultExecute(activeClient!, resolvedConfig.router, resolvedConfig)
+        : await simulateRouterCall(activeClient!, resolvedConfig.router, resolvedConfig);
   }
 
   if (simulation && !simulation.ok) {
@@ -328,18 +425,21 @@ export async function buildMerchantMoeForkSimulationReport(
     ok: simulationPassed && !hardBlock,
     protocolId: "merchant-moe" as const,
     mode: "mainnet-fork-simulation" as const,
-    simulationMode: simulationConfig.mode,
+    simulationMode: resolvedConfig.mode,
     executionEnabled: false as const,
-    forkRpcConfigured: Boolean(simulationConfig.forkRpcUrl),
-    forkSimulationEnabled: simulationConfig.forkSimulationEnabled,
+    forkRpcConfigured: Boolean(resolvedConfig.forkRpcUrl),
+    forkSimulationEnabled: resolvedConfig.forkSimulationEnabled,
     simulationAttempted,
     simulationPassed,
-    router: simulationConfig.router,
-    from: simulationConfig.from,
-    vault: simulationConfig.vault,
-    target: simulationConfig.mode === "vault-execute" ? simulationConfig.vault ?? simulationConfig.router : simulationConfig.router,
-    valueWei: simulationConfig.valueWei.toString(),
-    calldataBytes: calldataBytes(simulationConfig.calldata),
+    router: resolvedConfig.router,
+    from: resolvedConfig.from,
+    vault: resolvedConfig.vault,
+    target: resolvedConfig.mode === "vault-execute" ? resolvedConfig.vault ?? resolvedConfig.router : resolvedConfig.router,
+    calldataSource: resolvedConfig.calldataSource,
+    recipient: resolvedConfig.recipient,
+    deadline: resolvedConfig.deadline?.toString(),
+    valueWei: resolvedConfig.valueWei.toString(),
+    calldataBytes: calldataBytes(resolvedConfig.calldata),
     route: readiness.route,
     amountIn: readiness.amountIn,
     expectedOutWei: readiness.expectedOutWei,
@@ -368,6 +468,9 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `target: ${report.target}`,
     `from: ${report.from ?? "none"}`,
     `vault: ${report.vault ?? "none"}`,
+    `calldataSource: ${report.calldataSource}`,
+    `recipient: ${report.recipient ?? "none"}`,
+    `deadline: ${report.deadline ?? "none"}`,
     `calldataBytes: ${report.calldataBytes}`,
     `valueWei: ${report.valueWei}`,
     `route: ${report.route.join(" -> ")}`,
@@ -397,7 +500,7 @@ export async function runMerchantMoeForkSimulation(
   const quote: MerchantMoeQuote = await adapter.quoteExactInput(quoteConfig);
   const readiness = await buildMerchantMoeForkReadinessReport(quote, quoteConfig, env);
   const simulationConfig = loadMerchantMoeForkSimulationConfig(env);
-  const report = await buildMerchantMoeForkSimulationReport(readiness, simulationConfig, client);
+  const report = await buildMerchantMoeForkSimulationReport(readiness, simulationConfig, client, quote);
   write(formatMerchantMoeForkSimulation(report));
   try {
     await trace.append("merchant_moe.fork_simulation", {

@@ -17,11 +17,12 @@ Execution plans now carry normalized `expectedOutWei`, `minOutWei`, `slippageBps
 Implemented fork simulation v1:
 
 - `npm run simulate:merchant-moe-fork` writes `merchant_moe.fork_simulation` JSONL evidence.
-- The command blocks until a fork RPC, simulation account, and swap calldata fixture are configured.
-- When calldata is provided, it can simulate a direct LBRouter call or `AgentVault.execute` on a fork where the vault exists.
+- The command blocks until a fork RPC and simulation account are configured.
+- When no explicit calldata fixture is provided, it builds simulation-only Merchant Moe LBRouter calldata from quote route metadata, minOut, recipient, and deadline.
+- It can simulate a direct LBRouter call or `AgentVault.execute` on a fork where the vault exists.
 - It records attempted/passed status, gas estimate, revert reason, blockers, and next steps without submitting transactions.
 
-The remaining next steps are safe LBRouter calldata generation, richer gas/cost reporting, and regression fixtures for failed slippage/stale oracle cases.
+The remaining next steps are richer gas/cost reporting, allowance and balance preflight checks, and regression fixtures for failed slippage/stale oracle cases.
 
 ## Real Problems It Solves
 

@@ -72,7 +72,7 @@ function buildBlockers(
   blockers.push({
     ruleId: "EXECUTION_CALLDATA_DISABLED",
     severity: "blocker",
-    reason: "Merchant Moe remains read-only; swap calldata generation is intentionally disabled until fork tests are added.",
+    reason: "Live Merchant Moe execution remains disabled; LBRouter calldata generation is currently limited to fork simulation.",
   });
   return blockers;
 }
@@ -82,7 +82,7 @@ function nextSteps(report: Pick<MerchantMoeForkReadinessReport, "forkRpcConfigur
   if (!report.forkRpcConfigured) steps.push("Configure a local/mainnet-fork RPC for Mantle mainnet simulation.");
   if (report.quoteRisk.status === "unchecked") steps.push("Configure MERCHANT_MOE_REFERENCE_SOURCE for quote-vs-oracle checks.");
   if (report.quoteRisk.status === "blocked") steps.push("Fix route/liquidity/reference price before attempting simulation.");
-  steps.push("Add Merchant Moe LBRouter calldata builder with minOut/deadline once fork simulation tests are in place.");
+  steps.push("Run simulation-only LBRouter calldata through the fork gate and inspect balances, allowances, gas, and reverts.");
   steps.push("Only enable guarded execution after fork simulation, bounded allowance checks, and risk rules pass.");
   return steps;
 }
@@ -139,7 +139,7 @@ export function formatMerchantMoeForkReadiness(report: MerchantMoeForkReadinessR
       : ["- none"]),
     "nextSteps:",
     ...report.nextSteps.map((step) => `- ${step}`),
-    "execution: disabled; this command never builds or submits swap calldata",
+    "execution: disabled; this command never submits transactions",
   ].join("\n");
 }
 
