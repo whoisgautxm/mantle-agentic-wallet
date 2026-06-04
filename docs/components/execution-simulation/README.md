@@ -19,10 +19,11 @@ Implemented fork simulation v1:
 - `npm run simulate:merchant-moe-fork` writes `merchant_moe.fork_simulation` JSONL evidence.
 - The command blocks until a fork RPC and simulation account are configured.
 - When no explicit calldata fixture is provided, it builds simulation-only Merchant Moe LBRouter calldata from quote route metadata, minOut, recipient, and deadline.
+- Before calling the router, it reads token-in balance and LBRouter allowance for the swap owner and blocks insufficient state with explicit findings.
 - It can simulate a direct LBRouter call or `AgentVault.execute` on a fork where the vault exists.
 - It records attempted/passed status, gas estimate, revert reason, blockers, and next steps without submitting transactions.
 
-The remaining next steps are richer gas/cost reporting, allowance and balance preflight checks, and regression fixtures for failed slippage/stale oracle cases.
+The remaining next steps are richer gas/cost reporting and regression fixtures for failed slippage, stale oracle, insufficient balance, and insufficient allowance cases.
 
 ## Real Problems It Solves
 

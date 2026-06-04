@@ -47,6 +47,24 @@ async function readiness(env: NodeJS.ProcessEnv = {}) {
 }
 
 describe("Merchant Moe fork simulation", () => {
+  function clientWithPreflight(input: { balance: bigint; allowance: bigint; onCall?: (args: unknown) => void }): ForkSimulationClient {
+    return {
+      async readContract(args) {
+        const functionName = (args as { functionName?: string }).functionName;
+        if (functionName === "balanceOf") return input.balance;
+        if (functionName === "allowance") return input.allowance;
+        throw new Error(`unexpected readContract function ${functionName}`);
+      },
+      async call(args) {
+        input.onCall?.(args);
+        return { data: "0x1234" };
+      },
+      async estimateGas() {
+        return 12_345n;
+      },
+    };
+  }
+
   it("reports blocked preconditions before attempting simulation", async () => {
     const report = await buildMerchantMoeForkSimulationReport(await readiness(), loadMerchantMoeForkSimulationConfig({}));
 
@@ -95,15 +113,7 @@ describe("Merchant Moe fork simulation", () => {
 
   it("auto-builds fork-only LBRouter calldata from quote metadata", async () => {
     const calls: unknown[] = [];
-    const client: ForkSimulationClient = {
-      async call(args) {
-        calls.push(args);
-        return { data: "0x1234" };
-      },
-      async estimateGas() {
-        return 12_345n;
-      },
-    };
+    const client = clientWithPreflight({ balance: 2_000n, allowance: 1_500n, onCall: (args) => calls.push(args) });
 
     const report = await buildMerchantMoeForkSimulationReport(
       await readiness({
@@ -124,6 +134,9 @@ describe("Merchant Moe fork simulation", () => {
     expect(report.ok).toBe(true);
     expect(report.calldataSource).toBe("auto");
     expect(report.recipient).toBe(from);
+    expect(report.preflight?.status).toBe("ok");
+    expect(report.preflight?.balanceRaw).toBe("2000");
+    expect(report.preflight?.allowanceRaw).toBe("1500");
     expect(report.calldataBytes).toBeGreaterThan(4);
     expect(report.findings.map((finding) => finding.ruleId)).not.toContain("CALLDATA_MISSING");
     expect(routerCall.to).toBe(router);
@@ -136,6 +149,48 @@ describe("Merchant Moe fork simulation", () => {
       tokenPath: [tokenA, tokenB],
     });
     expect(decoded.args[3]).toBe(from);
+  });
+
+  it("blocks before router call when token-in balance is too low", async () => {
+    const calls: unknown[] = [];
+    const report = await buildMerchantMoeForkSimulationReport(
+      await readiness(),
+      loadMerchantMoeForkSimulationConfig({
+        MERCHANT_MOE_ENABLE_FORK_SIMULATION: "true",
+        MERCHANT_MOE_FORK_RPC_URL: "http://127.0.0.1:8545",
+        MERCHANT_MOE_SIMULATION_FROM: from,
+      }),
+      clientWithPreflight({ balance: 999n, allowance: 2_000n, onCall: (args) => calls.push(args) }),
+      quote,
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.simulationAttempted).toBe(false);
+    expect(report.preflight?.status).toBe("blocked");
+    expect(report.preflight?.balanceOk).toBe(false);
+    expect(report.findings.map((finding) => finding.ruleId)).toContain("TOKEN_BALANCE_TOO_LOW");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("blocks before router call when router allowance is too low", async () => {
+    const calls: unknown[] = [];
+    const report = await buildMerchantMoeForkSimulationReport(
+      await readiness(),
+      loadMerchantMoeForkSimulationConfig({
+        MERCHANT_MOE_ENABLE_FORK_SIMULATION: "true",
+        MERCHANT_MOE_FORK_RPC_URL: "http://127.0.0.1:8545",
+        MERCHANT_MOE_SIMULATION_FROM: from,
+      }),
+      clientWithPreflight({ balance: 2_000n, allowance: 999n, onCall: (args) => calls.push(args) }),
+      quote,
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.simulationAttempted).toBe(false);
+    expect(report.preflight?.status).toBe("blocked");
+    expect(report.preflight?.allowanceOk).toBe(false);
+    expect(report.findings.map((finding) => finding.ruleId)).toContain("ROUTER_ALLOWANCE_TOO_LOW");
+    expect(calls).toHaveLength(0);
   });
 
   it("records simulation failures as blockers", async () => {

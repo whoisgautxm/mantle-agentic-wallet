@@ -4,6 +4,9 @@ import { mantle } from "viem/chains";
 import { pathToFileURL } from "url";
 import { buildMerchantMoeForkReadinessReport, type MerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
 import { parseMerchantMoeQuoteSmokeConfig, type MerchantMoeQuoteSmokeConfig } from "./merchantMoeQuoteSmoke.js";
+import { classifyAllowance } from "./portfolio/allowances.js";
+import { ERC20_ABI } from "./portfolio/erc20.js";
+import type { AllowanceStatus } from "./portfolio/types.js";
 import { buildMerchantMoeSwapExactTokensForTokensCalldata } from "./protocols/merchantMoeCalldata.js";
 import {
   MERCHANT_MOE_MANTLE,
@@ -47,6 +50,10 @@ export interface MerchantMoeForkSimulationFinding {
     | "SIMULATION_FROM_MISSING"
     | "CALLDATA_MISSING"
     | "CALLDATA_BUILD_FAILED"
+    | "ERC20_PREFLIGHT_FAILED"
+    | "TOKEN_BALANCE_TOO_LOW"
+    | "ROUTER_ALLOWANCE_TOO_LOW"
+    | "ROUTER_ALLOWANCE_UNSAFE"
     | "VAULT_MISSING"
     | "QUOTE_RISK_BLOCKED"
     | "SIMULATION_FAILED"
@@ -80,16 +87,33 @@ export interface MerchantMoeForkSimulationReport {
   minOutWei: string;
   slippageBps: string;
   quoteRisk: MerchantMoeForkReadinessReport["quoteRisk"];
+  preflight?: MerchantMoeForkPreflight;
   simulation?: SimulationResult;
   findings: MerchantMoeForkSimulationFinding[];
   nextSteps: string[];
 }
 
 export interface ForkSimulationClient {
+  readContract?(args: unknown): Promise<unknown>;
   call(args: unknown): Promise<{ data?: unknown } | unknown>;
   estimateGas?(args: unknown): Promise<bigint>;
   simulateContract?(args: unknown): Promise<{ result?: unknown }>;
   estimateContractGas?(args: unknown): Promise<bigint>;
+}
+
+export interface MerchantMoeForkPreflight {
+  status: "unchecked" | "ok" | "blocked";
+  tokenIn: `0x${string}`;
+  owner: `0x${string}`;
+  spender: `0x${string}`;
+  requiredAmountIn: string;
+  balanceRaw?: string;
+  allowanceRaw?: string;
+  allowanceStatus?: AllowanceStatus;
+  balanceOk?: boolean;
+  allowanceOk?: boolean;
+  warnings: string[];
+  reason: string;
 }
 
 function asAddress(raw: string | undefined, label: string): `0x${string}` | undefined {
@@ -295,8 +319,111 @@ function canAttempt(config: MerchantMoeForkSimulationConfig, findings: readonly 
     Boolean(config.from) &&
     Boolean(config.calldata) &&
     (config.mode === "router-call" || Boolean(config.vault)) &&
-    !findings.some((finding) => finding.severity === "critical")
+    !findings.some((finding) => finding.severity === "blocker" || finding.severity === "critical")
   );
+}
+
+function swapOwner(config: MerchantMoeForkSimulationConfig): `0x${string}` | undefined {
+  return config.mode === "vault-execute" ? config.vault : config.from;
+}
+
+async function readErc20Raw(
+  client: ForkSimulationClient,
+  token: `0x${string}`,
+  functionName: "balanceOf" | "allowance",
+  args: readonly `0x${string}`[],
+): Promise<bigint> {
+  if (!client.readContract) throw new Error("fork client does not support ERC20 readContract preflight");
+  return (await client.readContract({
+    address: token,
+    abi: ERC20_ABI,
+    functionName,
+    args,
+  })) as bigint;
+}
+
+async function buildErc20Preflight(
+  client: ForkSimulationClient,
+  config: MerchantMoeForkSimulationConfig,
+  quote: MerchantMoeQuote,
+): Promise<MerchantMoeForkPreflight> {
+  const tokenIn = quote.route[0];
+  const owner = swapOwner(config);
+  if (!tokenIn) throw new Error("Merchant Moe quote route is missing token-in");
+  if (!owner) throw new Error("Merchant Moe simulation owner is missing");
+
+  const base = {
+    tokenIn,
+    owner,
+    spender: config.router,
+    requiredAmountIn: quote.amountIn.toString(),
+    warnings: [] as string[],
+  };
+
+  try {
+    const [balanceRaw, allowanceRaw] = await Promise.all([
+      readErc20Raw(client, tokenIn, "balanceOf", [owner]),
+      readErc20Raw(client, tokenIn, "allowance", [owner, config.router]),
+    ]);
+    const balanceOk = balanceRaw >= quote.amountIn;
+    const allowanceOk = allowanceRaw >= quote.amountIn;
+    const allowanceStatus = classifyAllowance(allowanceRaw, quote.amountIn);
+    const warnings = allowanceStatus === "excessive" || allowanceStatus === "unbounded" ? [`router allowance is ${allowanceStatus}`] : [];
+    const status = balanceOk && allowanceOk ? "ok" : "blocked";
+    return {
+      ...base,
+      status,
+      balanceRaw: balanceRaw.toString(),
+      allowanceRaw: allowanceRaw.toString(),
+      allowanceStatus,
+      balanceOk,
+      allowanceOk,
+      warnings,
+      reason: status === "ok" ? "token-in balance and router allowance cover amountIn" : "token-in balance or router allowance is insufficient",
+    };
+  } catch (error) {
+    return {
+      ...base,
+      status: "unchecked",
+      warnings: [errorReason(error)],
+      reason: `ERC20 preflight failed: ${errorReason(error)}`,
+    };
+  }
+}
+
+function preflightFindings(preflight: MerchantMoeForkPreflight | undefined): MerchantMoeForkSimulationFinding[] {
+  if (!preflight) return [];
+  const findings: MerchantMoeForkSimulationFinding[] = [];
+  if (preflight.status === "unchecked") {
+    findings.push({
+      ruleId: "ERC20_PREFLIGHT_FAILED",
+      severity: "blocker",
+      reason: preflight.reason,
+    });
+    return findings;
+  }
+  if (preflight.balanceOk === false) {
+    findings.push({
+      ruleId: "TOKEN_BALANCE_TOO_LOW",
+      severity: "blocker",
+      reason: `Token-in balance ${preflight.balanceRaw ?? "unknown"} is below required amountIn ${preflight.requiredAmountIn}.`,
+    });
+  }
+  if (preflight.allowanceOk === false) {
+    findings.push({
+      ruleId: "ROUTER_ALLOWANCE_TOO_LOW",
+      severity: "blocker",
+      reason: `Router allowance ${preflight.allowanceRaw ?? "unknown"} is below required amountIn ${preflight.requiredAmountIn}.`,
+    });
+  }
+  if (preflight.allowanceStatus === "excessive" || preflight.allowanceStatus === "unbounded") {
+    findings.push({
+      ruleId: "ROUTER_ALLOWANCE_UNSAFE",
+      severity: "warning",
+      reason: `Router allowance is ${preflight.allowanceStatus}; prefer bounded approvals before guarded execution.`,
+    });
+  }
+  return findings;
 }
 
 async function simulateRouterCall(
@@ -381,6 +508,18 @@ function nextSteps(report: Pick<MerchantMoeForkSimulationReport, "simulationPass
   if (report.findings.some((finding) => finding.ruleId === "SIMULATION_FROM_MISSING")) {
     steps.push("Choose a fork account/vault-like address with the token balances and approvals needed for the swap.");
   }
+  if (report.findings.some((finding) => finding.ruleId === "ERC20_PREFLIGHT_FAILED")) {
+    steps.push("Fix ERC20 balance/allowance reads on the fork RPC before attempting router simulation.");
+  }
+  if (report.findings.some((finding) => finding.ruleId === "TOKEN_BALANCE_TOO_LOW")) {
+    steps.push("Use or fund a fork simulation owner with enough token-in balance for amountIn.");
+  }
+  if (report.findings.some((finding) => finding.ruleId === "ROUTER_ALLOWANCE_TOO_LOW")) {
+    steps.push("Set a bounded token-in allowance from the simulation owner to the Merchant Moe LBRouter before retrying.");
+  }
+  if (report.findings.some((finding) => finding.ruleId === "ROUTER_ALLOWANCE_UNSAFE")) {
+    steps.push("Prefer a bounded router approval before promoting this path toward guarded execution.");
+  }
   if (report.findings.some((finding) => finding.ruleId === "SIMULATION_FAILED")) {
     steps.push("Inspect revert reason, balances, approvals, minOut, route liquidity, and deadline on the fork.");
   }
@@ -400,8 +539,14 @@ export async function buildMerchantMoeForkSimulationReport(
   const resolvedConfig = withAutoCalldata(readiness, simulationConfig, quote);
   const activeClient = client ?? createForkClient(resolvedConfig);
   const findings = baseFindings(readiness, resolvedConfig);
+  let preflight: MerchantMoeForkPreflight | undefined;
   let simulation: SimulationResult | undefined;
   let simulationAttempted = false;
+
+  if (quote && activeClient && resolvedConfig.calldata && swapOwner(resolvedConfig)) {
+    preflight = await buildErc20Preflight(activeClient, resolvedConfig, quote);
+    findings.push(...preflightFindings(preflight));
+  }
 
   if (canAttempt(resolvedConfig, findings)) {
     simulationAttempted = true;
@@ -446,6 +591,7 @@ export async function buildMerchantMoeForkSimulationReport(
     minOutWei: readiness.minOutWei,
     slippageBps: readiness.slippageBps,
     quoteRisk: readiness.quoteRisk,
+    preflight,
     simulation,
     findings,
   };
@@ -477,6 +623,14 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `expectedOutWei: ${report.expectedOutWei}`,
     `minOutWei: ${report.minOutWei}`,
     `slippageBps: ${report.slippageBps}`,
+    `preflightStatus: ${report.preflight?.status ?? "not-run"}`,
+    `tokenIn: ${report.preflight?.tokenIn ?? "none"}`,
+    `preflightOwner: ${report.preflight?.owner ?? "none"}`,
+    `tokenInBalanceRaw: ${report.preflight?.balanceRaw ?? "none"}`,
+    `routerAllowanceRaw: ${report.preflight?.allowanceRaw ?? "none"}`,
+    `routerAllowanceStatus: ${report.preflight?.allowanceStatus ?? "none"}`,
+    `preflightReason: ${report.preflight?.reason ?? "none"}`,
+    `preflightWarnings: ${report.preflight?.warnings.length ? report.preflight.warnings.join("; ") : "none"}`,
     `gasEstimate: ${report.simulation?.gasEstimate?.toString() ?? "none"}`,
     `revertReason: ${report.simulation?.revertReason ?? "none"}`,
     "findings:",
