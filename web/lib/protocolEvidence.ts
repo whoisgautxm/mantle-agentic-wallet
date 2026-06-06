@@ -44,7 +44,7 @@ interface TraceEvent {
   type?: string;
   protocolId?: string;
   mode?: string;
-  report?: MerchantMoeForkReport | MerchantMoeForkSimulationReport;
+  report?: MerchantMoeForkReport | MerchantMoeForkSimulationReport | MerchantMoeAdversarialSuiteReport;
   quote?: MerchantMoeQuote;
   risk?: MerchantMoeQuoteRisk;
   executionEnabled?: boolean;
@@ -146,10 +146,38 @@ interface MerchantMoeForkSimulationReport {
   nextSteps?: string[];
 }
 
+interface MerchantMoeAdversarialScenario {
+  id?: string;
+  label?: string;
+  stage?: string;
+  expectedRuleId?: string;
+  observedRuleId?: string;
+  passed?: boolean;
+  simulationAttempted?: boolean;
+  swapTransactionSubmitted?: boolean;
+  reason?: string;
+}
+
+interface MerchantMoeAdversarialSuiteReport {
+  ok?: boolean;
+  executionEnabled?: boolean;
+  forkBlockNumber?: string | number;
+  route?: string[];
+  amountIn?: string | number;
+  expectedOutWei?: string | number;
+  totalScenarios?: number;
+  passedScenarios?: number;
+  failedScenarios?: number;
+  noUnsafeSwapTransactionsSubmitted?: boolean;
+  scenarios?: MerchantMoeAdversarialScenario[];
+  nextSteps?: string[];
+}
+
 const readinessCommand = "cd agent && npm run readiness:merchant-moe";
 const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
 const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
 const anvilCommand = "cd agent && npm run simulate:merchant-moe-anvil";
+const adversarialCommand = "cd agent && npm run simulate:merchant-moe-adversarial";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -228,6 +256,13 @@ function latestMerchantMoeEvent(events: readonly TraceEvent[]): TraceEvent | und
     ) {
       return event;
     }
+  }
+  return undefined;
+}
+
+function latestMerchantMoeAdversarialEvent(events: readonly TraceEvent[]): TraceEvent | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index].type === "merchant_moe.adversarial_suite") return events[index];
   }
   return undefined;
 }
@@ -448,8 +483,66 @@ function merchantMoeItem(root: string, artifact: TraceArtifact | MissingTraceArt
   return quoteSmokeItem(root, artifact, event);
 }
 
+function missingAdversarialItem(root: string, artifact: TraceArtifact | MissingTraceArtifact): ProtocolEvidenceItem {
+  return {
+    id: "merchant-moe-adversarial",
+    name: "Merchant Moe safety suite",
+    description: "Real-fork adversarial controls",
+    status: "warn",
+    label: "Not captured",
+    detail: "Run the adversarial Mantle-fork suite to prove unsafe paths stop before swap submission.",
+    command: adversarialCommand,
+    artifactPath: "path" in artifact && artifact.path ? displayPath(root, artifact.path) : undefined,
+    updatedAt: "updatedAt" in artifact ? artifact.updatedAt : undefined,
+    route: [],
+    metrics: [],
+    findings: [],
+    nextSteps: ["Generate paused-vault, disallowed-router, stale-oracle, min-out, and unsafe-allowance evidence."],
+  };
+}
+
+function adversarialItem(root: string, artifact: TraceArtifact | MissingTraceArtifact): ProtocolEvidenceItem {
+  if (!("events" in artifact)) return missingAdversarialItem(root, artifact);
+  const event = latestMerchantMoeAdversarialEvent(artifact.events);
+  if (!event) return missingAdversarialItem(root, artifact);
+  const report = (event.report ?? {}) as MerchantMoeAdversarialSuiteReport;
+  const scenarios = report.scenarios ?? [];
+  const allBlocked = Boolean(report.ok && report.noUnsafeSwapTransactionsSubmitted);
+
+  return {
+    id: "merchant-moe-adversarial",
+    name: "Merchant Moe safety suite",
+    description: "Real-fork adversarial controls",
+    status: allBlocked ? "ok" : "bad",
+    label: allBlocked ? `${report.passedScenarios ?? 0}/${report.totalScenarios ?? scenarios.length} blocked safely` : "Safety gap",
+    detail: allBlocked
+      ? "Paused vault, disallowed router, stale oracle, impossible minOut, and unsafe allowance all stopped before an unsafe swap transaction."
+      : "At least one adversarial condition did not produce its expected blocker.",
+    command: adversarialCommand,
+    artifactPath: displayPath(root, artifact.path),
+    updatedAt: event.ts ?? artifact.updatedAt,
+    route: report.route ?? [],
+    metrics: [
+      { label: "Fork block", value: text(report.forkBlockNumber) },
+      { label: "Passed", value: `${report.passedScenarios ?? 0}/${report.totalScenarios ?? scenarios.length}` },
+      { label: "Failed", value: text(report.failedScenarios ?? 0) },
+      { label: "Unsafe swap txs", value: report.noUnsafeSwapTransactionsSubmitted ? "0" : "detected" },
+      { label: "Amount in", value: text(report.amountIn) },
+      { label: "Expected out", value: text(report.expectedOutWei) },
+      { label: "Execution", value: report.executionEnabled ? "enabled" : "disabled" },
+    ],
+    findings: scenarios.map(
+      (scenario) =>
+        `${scenario.passed ? "PASS" : "FAIL"} ${scenario.label ?? scenario.id ?? "scenario"}: ${
+          scenario.observedRuleId ?? "no blocker"
+        } (${scenario.stage ?? "unknown"}${scenario.simulationAttempted ? ", simulated" : ", pre-simulation"})`,
+    ),
+    nextSteps: (report.nextSteps ?? []).slice(0, 4),
+  };
+}
+
 export async function getProtocolEvidence(): Promise<ProtocolEvidence> {
   const root = workspaceRoot();
   const artifact = await readTraceArtifact(traceCandidates(root));
-  return { items: [merchantMoeItem(root, artifact)] };
+  return { items: [merchantMoeItem(root, artifact), adversarialItem(root, artifact)] };
 }

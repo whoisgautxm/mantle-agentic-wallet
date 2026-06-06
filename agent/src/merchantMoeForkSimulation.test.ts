@@ -193,6 +193,35 @@ describe("Merchant Moe fork simulation", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("blocks before router call when router allowance is unbounded", async () => {
+    const calls: unknown[] = [];
+    const report = await buildMerchantMoeForkSimulationReport(
+      await readiness(),
+      loadMerchantMoeForkSimulationConfig({
+        MERCHANT_MOE_ENABLE_FORK_SIMULATION: "true",
+        MERCHANT_MOE_FORK_RPC_URL: "http://127.0.0.1:8545",
+        MERCHANT_MOE_SIMULATION_FROM: from,
+      }),
+      clientWithPreflight({
+        balance: 2_000n,
+        allowance: (1n << 256n) - 1n,
+        onCall: (args) => calls.push(args),
+      }),
+      quote,
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.simulationAttempted).toBe(false);
+    expect(report.preflight?.allowanceStatus).toBe("unbounded");
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({
+        ruleId: "ROUTER_ALLOWANCE_UNSAFE",
+        severity: "blocker",
+      }),
+    );
+    expect(calls).toHaveLength(0);
+  });
+
   it("records simulation failures as blockers", async () => {
     const client: ForkSimulationClient = {
       async call() {

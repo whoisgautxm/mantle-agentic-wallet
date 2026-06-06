@@ -40,7 +40,7 @@ export default function ProtocolEvidencePanel({ evidence }: { evidence: Protocol
       <div className="section-head compact">
         <div>
           <p className="eyebrow">Real DEX evidence</p>
-          <h2>Merchant Moe quote path</h2>
+          <h2>Merchant Moe fork evidence</h2>
         </div>
         <span className={`badge ${status}`}>{summaryLabel(status)}</span>
       </div>

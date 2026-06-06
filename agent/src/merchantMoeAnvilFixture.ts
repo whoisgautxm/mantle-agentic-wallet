@@ -90,6 +90,13 @@ const AGENT_VAULT_ABI = [
     ],
     outputs: [{ name: "", type: "bytes" }],
   },
+  {
+    type: "function",
+    name: "setPaused",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "paused", type: "bool" }],
+    outputs: [],
+  },
   { type: "function", name: "agent", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
   {
@@ -199,11 +206,11 @@ export function buildMerchantMoeAnvilArgs(config: MerchantMoeAnvilFixtureConfig)
   ];
 }
 
-function localRpcUrl(config: MerchantMoeAnvilFixtureConfig): string {
+export function localRpcUrl(config: MerchantMoeAnvilFixtureConfig): string {
   return `http://${config.host}:${config.port}`;
 }
 
-async function jsonRpc<T>(url: string, method: string, params: unknown[] = []): Promise<T> {
+export async function jsonRpc<T>(url: string, method: string, params: unknown[] = []): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -216,7 +223,7 @@ async function jsonRpc<T>(url: string, method: string, params: unknown[] = []): 
   return body.result;
 }
 
-async function waitForAnvil(
+export async function waitForAnvil(
   url: string,
   child: ChildProcess,
   logs: () => string,
@@ -245,7 +252,7 @@ async function waitForAnvil(
   throw new Error(`Anvil did not become ready: ${(lastError as Error | undefined)?.message ?? logs()}`);
 }
 
-async function stopAnvil(child: ChildProcess): Promise<void> {
+export async function stopAnvil(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null) return;
   child.kill("SIGTERM");
   await Promise.race([
@@ -289,7 +296,7 @@ export function parseAgentVaultBytecode(raw: string): `0x${string}` {
   return bytecode as `0x${string}`;
 }
 
-async function loadAgentVaultBytecode(env: NodeJS.ProcessEnv): Promise<`0x${string}`> {
+export async function loadAgentVaultBytecode(env: NodeJS.ProcessEnv): Promise<`0x${string}`> {
   const root = workspaceRoot();
   const contractsDirectory = env.CONTRACTS_DIRECTORY?.trim() || path.join(root, "contracts");
   const forgeBinary = env.FORGE_BINARY?.trim() || "forge";
@@ -326,7 +333,7 @@ async function submitUnlockedTransaction(
   return { hash, receipt };
 }
 
-async function sendUnlockedTransaction(
+export async function sendUnlockedTransaction(
   url: string,
   transaction: {
     from: `0x${string}`;
@@ -338,12 +345,12 @@ async function sendUnlockedTransaction(
   return (await submitUnlockedTransaction(url, transaction)).hash;
 }
 
-async function assertForkContract(url: string, address: `0x${string}`, label: string): Promise<void> {
+export async function assertForkContract(url: string, address: `0x${string}`, label: string): Promise<void> {
   const code = await jsonRpc<`0x${string}`>(url, "eth_getCode", [address, "latest"]);
   if (code === "0x") throw new Error(`${label} has no bytecode on the local Mantle fork`);
 }
 
-function quoteConfig(
+export function quoteConfig(
   env: NodeJS.ProcessEnv,
   config: MerchantMoeAnvilFixtureConfig,
 ): MerchantMoeQuoteSmokeConfig {
@@ -363,7 +370,7 @@ export function agentVaultLimits(amountIn: bigint): { spendLimitPerTx: bigint; d
   };
 }
 
-async function deployAgentVault(
+export async function deployAgentVault(
   url: string,
   account: `0x${string}`,
   bytecode: `0x${string}`,
@@ -383,11 +390,12 @@ async function deployAgentVault(
   return { address, hash: deployment.hash };
 }
 
-async function setVaultTarget(
+export async function setVaultTarget(
   url: string,
   owner: `0x${string}`,
   vault: `0x${string}`,
   target: `0x${string}`,
+  allowed = true,
 ): Promise<`0x${string}`> {
   return sendUnlockedTransaction(url, {
     from: owner,
@@ -395,12 +403,29 @@ async function setVaultTarget(
     data: encodeFunctionData({
       abi: AGENT_VAULT_ABI,
       functionName: "setAllowedTarget",
-      args: [target, true],
+      args: [target, allowed],
     }),
   });
 }
 
-async function executeThroughVault(
+export async function setVaultPaused(
+  url: string,
+  owner: `0x${string}`,
+  vault: `0x${string}`,
+  paused: boolean,
+): Promise<`0x${string}`> {
+  return sendUnlockedTransaction(url, {
+    from: owner,
+    to: vault,
+    data: encodeFunctionData({
+      abi: AGENT_VAULT_ABI,
+      functionName: "setPaused",
+      args: [paused],
+    }),
+  });
+}
+
+export async function executeThroughVault(
   url: string,
   agent: `0x${string}`,
   vault: `0x${string}`,
@@ -420,7 +445,7 @@ async function executeThroughVault(
   });
 }
 
-async function readVaultEvidence(
+export async function readVaultEvidence(
   client: ReturnType<typeof createPublicClient>,
   vault: `0x${string}`,
   token: `0x${string}`,
@@ -745,8 +770,8 @@ export async function runMerchantMoeAnvilFixture(
       nextSteps: forkExecution.passed
         ? [
             "Keep this AgentVault-to-Merchant-Moe path as the canonical fork regression fixture.",
-            "Add adverse fork cases for paused vault, disallowed router, stale oracle, slippage, and unsafe allowance.",
-            "Keep live execution disabled until the adversarial suite and submission review pass.",
+            "Run the adversarial fork suite beside this happy path as the release gate.",
+            "Keep live execution disabled until submission review and explicit production hardening.",
           ]
         : [
             "Fix the fork-only AgentVault execution evidence before considering any live protocol path.",

@@ -459,8 +459,8 @@ function preflightFindings(preflight: MerchantMoeForkPreflight | undefined): Mer
   if (preflight.allowanceStatus === "excessive" || preflight.allowanceStatus === "unbounded") {
     findings.push({
       ruleId: "ROUTER_ALLOWANCE_UNSAFE",
-      severity: "warning",
-      reason: `Router allowance is ${preflight.allowanceStatus}; prefer bounded approvals before guarded execution.`,
+      severity: "blocker",
+      reason: `Router allowance is ${preflight.allowanceStatus}; guarded execution requires a bounded approval.`,
     });
   }
   return findings;
@@ -558,7 +558,7 @@ function nextSteps(report: Pick<MerchantMoeForkSimulationReport, "simulationPass
     steps.push("Set a bounded token-in allowance from the simulation owner to the Merchant Moe LBRouter before retrying.");
   }
   if (report.findings.some((finding) => finding.ruleId === "ROUTER_ALLOWANCE_UNSAFE")) {
-    steps.push("Prefer a bounded router approval before promoting this path toward guarded execution.");
+    steps.push("Replace the unsafe router allowance with a bounded approval before retrying simulation.");
   }
   if (report.findings.some((finding) => finding.ruleId === "SIMULATION_FAILED")) {
     steps.push("Inspect revert reason, balances, approvals, minOut, route liquidity, and deadline on the fork.");
