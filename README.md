@@ -325,7 +325,7 @@ set -a && source ../.env && set +a
 npm run simulate:merchant-moe-anvil
 ```
 
-This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, wraps fork-only MNT into real forked WMNT, sets an exact bounded router approval, fetches the real Merchant Moe quote, and simulates the real router call. It records the fork block and local setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
+This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, compiles and deploys the real project `AgentVault`, and configures its target allowlist. The vault wraps fork-only MNT, grants an exact bounded WMNT approval, simulates `AgentVault.execute` against Merchant Moe, then executes one swap only on the disposable fork. The report verifies output balance delta, vault nonce, gas, and the emitted `AgentDecision` event. It records the fork block and setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
 
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 

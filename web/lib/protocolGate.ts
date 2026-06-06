@@ -118,6 +118,28 @@ interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport
     reason?: string;
     revertReason?: string;
   };
+  vaultEvidence?: {
+    address?: string;
+    agent?: string;
+    paused?: boolean;
+    tokenAllowed?: boolean;
+    routerAllowed?: boolean;
+    spendLimitPerTx?: string | number;
+    dailyLimit?: string | number;
+    spentToday?: string | number;
+    nonceBeforeSwap?: string | number;
+  };
+  forkExecution?: {
+    attempted?: boolean;
+    passed?: boolean;
+    transactionHash?: string;
+    gasUsed?: string | number;
+    agentDecisionEvents?: string | number;
+    tokenOutDelta?: string | number;
+    nonceBefore?: string | number;
+    nonceAfter?: string | number;
+    reason?: string;
+  };
   findings?: Finding[];
 }
 
@@ -317,6 +339,24 @@ function simulationStep(report: MerchantMoeForkSimulationReport): ProtocolGateSt
   );
 }
 
+function forkExecutionStep(report: MerchantMoeForkSimulationReport): ProtocolGateStep {
+  const execution = report.forkExecution;
+  const status: ProtocolGateStatus = execution?.passed
+    ? "ok"
+    : execution?.attempted || hasFinding(report, "FORK_EXECUTION_FAILED")
+      ? "bad"
+      : "warn";
+  return step(
+    "fork-execution",
+    "Vault fork execution",
+    "Submit one guarded swap through AgentVault.execute on the disposable Anvil fork.",
+    status,
+    execution?.passed ? "Executed" : execution?.attempted ? "Failed" : "Waiting",
+    execution?.reason ??
+      `output delta ${text(execution?.tokenOutDelta)}, AgentDecision events ${text(execution?.agentDecisionEvents)}.`,
+  );
+}
+
 function executionStep(report: MerchantMoeForkSimulationReport): ProtocolGateStep {
   if (report.fixtureMode && report.ok && report.simulationPassed && report.executionEnabled === false) {
     const anvilBacked = report.fixtureKind === "anvil-mainnet-fork";
@@ -391,6 +431,7 @@ function fallbackGate(root: string, artifact: MissingTraceArtifact | TraceArtifa
       step("balance", "Token-in balance", "Check ERC20 balance before simulation.", "warn", "Missing", "No ERC20 preflight captured."),
       step("allowance", "Router allowance", "Check router allowance before simulation.", "warn", "Missing", "No ERC20 preflight captured."),
       step("simulation", "Fork simulation", "Simulate on a mainnet fork.", "warn", "Missing", "No simulation captured."),
+      step("fork-execution", "Vault fork execution", "Execute through AgentVault on a disposable fork.", "warn", "Missing", "No fork execution captured."),
       step("execution", "Live execution", "Keep live swaps disabled until all gates pass.", "warn", "Disabled", "Live swaps disabled."),
     ],
     blockers: error ? [error] : [],
@@ -410,6 +451,7 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     quoteRisk: risk,
     findings: report.findings ?? report.blockers,
   };
+  const anvilBacked = normalizedReport.fixtureKind === "anvil-mainnet-fork";
   const steps = [
     quoteStep(normalizedReport),
     oracleStep(normalizedReport),
@@ -417,6 +459,7 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     balanceStep(normalizedReport),
     allowanceStep(normalizedReport),
     simulationStep(normalizedReport),
+    ...(anvilBacked ? [forkExecutionStep(normalizedReport)] : []),
     executionStep(normalizedReport),
   ];
   const status = statusFromSteps(steps);
@@ -425,7 +468,6 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     .map(findingText);
   const firstBad = steps.find((entry) => entry.status === "bad");
 
-  const anvilBacked = normalizedReport.fixtureKind === "anvil-mainnet-fork";
   const command = anvilBacked ? anvilCommand : normalizedReport.fixtureMode ? fixtureCommand : forkCommand;
 
   return {
@@ -435,8 +477,10 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     label: anvilBacked && status === "ok" ? "Anvil pass" : normalizedReport.fixtureMode && status === "ok" ? "Fixture pass" : labelFromStatus(status),
     headline: firstBad
       ? `Blocked at ${firstBad.name}`
-      : anvilBacked && status === "ok"
-        ? "Real Merchant Moe contracts passed on an Anvil mainnet fork"
+      : anvilBacked && normalizedReport.forkExecution?.passed && status === "ok"
+        ? "AgentVault executed a guarded Merchant Moe swap on an Anvil fork"
+        : anvilBacked && status === "ok"
+          ? "Real Merchant Moe contracts passed on an Anvil mainnet fork"
         : normalizedReport.fixtureMode && status === "ok"
         ? "Controlled Merchant Moe fixture passed every upstream gate"
         : status === "ok"
@@ -445,7 +489,7 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     detail:
       firstBad?.detail ??
       (anvilBacked
-        ? `Fork block ${text(normalizedReport.forkBlockNumber)} used real WMNT, LBQuoter, and LBRouter contracts with fork-only setup transactions.`
+        ? `Fork block ${text(normalizedReport.forkBlockNumber)} used a deployed AgentVault with real WMNT, LBQuoter, and LBRouter contracts; output delta ${text(normalizedReport.forkExecution?.tokenOutDelta)}.`
         : normalizedReport.fixtureMode
         ? "This is a deterministic fixture proving quote, oracle, calldata, ERC20 state, and simulation plumbing without live funds."
         : "Merchant Moe evidence is available, but at least one gate is still intentionally cautious before live execution."),
@@ -463,6 +507,26 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
       { label: "Evidence mode", value: anvilBacked ? "Anvil fork" : normalizedReport.fixtureMode ? "fixture" : "fork" },
       { label: "Fork block", value: text(normalizedReport.forkBlockNumber) },
       { label: "Setup txs", value: text(normalizedReport.setupTransactionHashes?.length ?? 0) },
+      { label: "Vault", value: short(normalizedReport.vaultEvidence?.address ?? normalizedReport.vault) },
+      {
+        label: "Vault controls",
+        value:
+          normalizedReport.vaultEvidence?.routerAllowed &&
+          normalizedReport.vaultEvidence?.tokenAllowed &&
+          !normalizedReport.vaultEvidence?.paused
+            ? "green"
+            : "review",
+      },
+      {
+        label: "Fork execution",
+        value: normalizedReport.forkExecution?.passed
+          ? "passed"
+          : normalizedReport.forkExecution?.attempted
+            ? "failed"
+            : "not attempted",
+      },
+      { label: "Output delta", value: text(normalizedReport.forkExecution?.tokenOutDelta) },
+      { label: "Decision events", value: text(normalizedReport.forkExecution?.agentDecisionEvents) },
     ],
     steps,
     blockers: blockers.slice(0, 5),

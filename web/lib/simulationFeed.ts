@@ -167,6 +167,21 @@ interface MerchantMoeForkSimulationReport {
   slippageBps?: string | number;
   quoteRisk?: MerchantMoeQuoteRisk;
   simulation?: SimulationResult;
+  vaultEvidence?: {
+    address?: string;
+    routerAllowed?: boolean;
+    tokenAllowed?: boolean;
+    paused?: boolean;
+  };
+  forkExecution?: {
+    attempted?: boolean;
+    passed?: boolean;
+    transactionHash?: string;
+    gasUsed?: string | number;
+    agentDecisionEvents?: string | number;
+    tokenOutDelta?: string | number;
+    reason?: string;
+  };
   findings?: Array<{
     ruleId?: string;
     severity?: string;
@@ -412,6 +427,8 @@ function merchantMoeStatus(report: MerchantMoeForkSimulationReport): SimulationF
 }
 
 function merchantMoeLabel(report: MerchantMoeForkSimulationReport): string {
+  if (report.forkExecution?.passed) return "Fork executed";
+  if (report.forkExecution?.attempted) return "Fork tx failed";
   if (report.simulationPassed) return "Sim passed";
   if (report.simulationAttempted) return "Sim failed";
   return "Blocked before sim";
@@ -447,11 +464,11 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
 
   return {
     id: `merchant-moe-fork-${event.ts ?? artifact.updatedAt}`,
-    title: anvilBacked ? "Merchant Moe Anvil preflight" : report.fixtureMode ? "Merchant Moe fixture preflight" : "Merchant Moe fork preflight",
-    description: anvilBacked ? "real mainnet-fork contracts" : report.fixtureMode ? "controlled fixture" : text(report.simulationMode, "mainnet-fork simulation"),
+    title: anvilBacked ? "Merchant Moe vault fork" : report.fixtureMode ? "Merchant Moe fixture preflight" : "Merchant Moe fork preflight",
+    description: anvilBacked ? "AgentVault + real mainnet-fork contracts" : report.fixtureMode ? "controlled fixture" : text(report.simulationMode, "mainnet-fork simulation"),
     status: merchantMoeStatus(report),
     label: merchantMoeLabel(report),
-    runner: "read-only adapter",
+    runner: anvilBacked ? "AgentVault fixture" : "read-only adapter",
     protocolId: report.protocolId ?? event.protocolId ?? "merchant-moe",
     updatedAt: event.ts ?? artifact.updatedAt,
     artifactPath: displayPath(root, artifact.path),
@@ -466,6 +483,7 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
     revertReason: text(simulation?.revertReason ?? simulation?.reason, "none"),
     blockedReason: blocker.reason,
     blockedRuleId: blocker.ruleId,
+    txHash: report.forkExecution?.transactionHash,
     summary: `${routeLabel(report.route)}. Quote risk: ${report.quoteRisk?.status ?? "unchecked"} - ${
       report.quoteRisk?.reason ?? "no quote-risk reason captured"
     }.`,
@@ -479,6 +497,14 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
       { label: "Value wei", value: text(report.valueWei) },
       { label: "Min out", value: text(report.minOutWei) },
       { label: "Deviation bps", value: text(report.quoteRisk?.deviationBps, report.quoteRisk?.status === "unchecked" ? "unchecked" : "n/a") },
+      { label: "Vault", value: short(report.vaultEvidence?.address ?? report.vault) },
+      {
+        label: "Fork execution",
+        value: report.forkExecution?.passed ? "pass" : report.forkExecution?.attempted ? "fail" : "not run",
+      },
+      { label: "Fork gas", value: text(report.forkExecution?.gasUsed) },
+      { label: "Output delta", value: text(report.forkExecution?.tokenOutDelta) },
+      { label: "Decision events", value: text(report.forkExecution?.agentDecisionEvents) },
     ],
     findings: [
       ...(report.findings ?? []).map((finding) => `${finding.ruleId ?? "FINDING"}: ${finding.reason ?? "review report"}`),

@@ -123,6 +123,21 @@ interface MerchantMoeForkSimulationReport {
     revertReason?: string;
     warnings?: string[];
   };
+  vaultEvidence?: {
+    address?: string;
+    routerAllowed?: boolean;
+    tokenAllowed?: boolean;
+    paused?: boolean;
+  };
+  forkExecution?: {
+    attempted?: boolean;
+    passed?: boolean;
+    transactionHash?: string;
+    gasUsed?: string | number;
+    agentDecisionEvents?: string | number;
+    tokenOutDelta?: string | number;
+    reason?: string;
+  };
   findings?: Array<{
     ruleId?: string;
     severity?: string;
@@ -347,10 +362,21 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
     name: "Merchant Moe",
     description: anvilBacked ? "Anvil-backed mainnet fork" : report.fixtureMode ? "Controlled fork fixture" : "Mainnet-fork simulation",
     status,
-    label: anvilBacked && report.simulationPassed ? "Anvil pass" : report.fixtureMode && report.simulationPassed ? "Fixture pass" : report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
+    label:
+      anvilBacked && report.forkExecution?.passed
+        ? "Vault fork pass"
+        : anvilBacked && report.simulationPassed
+          ? "Simulation only"
+          : report.fixtureMode && report.simulationPassed
+            ? "Fixture pass"
+            : report.simulationPassed
+              ? "Simulated"
+              : report.simulationAttempted
+                ? "Failed"
+                : "Blocked",
     detail: `${routeLabel(route)}. Fork simulation ${
       report.simulationAttempted ? (report.simulationPassed ? "passed" : "failed") : "has not run"
-    }; quote risk is ${risk?.status ?? "unchecked"}: ${risk?.reason ?? "no risk reason captured"}.`,
+    }; vault fork execution ${report.forkExecution?.passed ? "passed" : report.forkExecution?.attempted ? "failed" : "was not attempted"}; quote risk is ${risk?.status ?? "unchecked"}: ${risk?.reason ?? "no risk reason captured"}.`,
     command: anvilBacked ? anvilCommand : report.fixtureMode ? fixtureCommand : simulationCommand,
     artifactPath: displayPath(root, artifact.path),
     updatedAt: event.ts ?? artifact.updatedAt,
@@ -367,6 +393,14 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
       { label: "Fork RPC", value: yesNo(report.forkRpcConfigured) },
       { label: "Min out", value: text(report.minOutWei) },
       { label: "Slippage bps", value: text(report.slippageBps) },
+      { label: "Vault", value: short(report.vaultEvidence?.address ?? report.vault) },
+      {
+        label: "Fork execution",
+        value: report.forkExecution?.passed ? "passed" : report.forkExecution?.attempted ? "failed" : "not attempted",
+      },
+      { label: "Fork gas", value: text(report.forkExecution?.gasUsed) },
+      { label: "Output delta", value: text(report.forkExecution?.tokenOutDelta) },
+      { label: "Decision events", value: text(report.forkExecution?.agentDecisionEvents) },
     ],
     findings: [
       ...findings.slice(0, 5).map(findingLabel),

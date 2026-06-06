@@ -5,6 +5,7 @@ const vault = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const account = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
 const target = "0xcccccccccccccccccccccccccccccccccccccccc" as const;
 const hash = `0x${"1".repeat(64)}` as const;
+let submitExecute: typeof import("./chain.js").submitExecute;
 
 const decision: Extract<Decision, { kind: "execute" }> = {
   kind: "execute",
@@ -15,14 +16,14 @@ const decision: Extract<Decision, { kind: "execute" }> = {
   rationale: "submit simulation test",
 };
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.MANTLE_RPC_URL = "http://127.0.0.1:8545";
   process.env.AGENT_PRIVATE_KEY = `0x${"2".repeat(64)}`;
-});
+  ({ submitExecute } = await import("./chain.js"));
+}, 15_000);
 
 describe("submitExecute", () => {
   it("blocks writes when the supplied simulation failed", async () => {
-    const { submitExecute } = await import("./chain.js");
     const writeContract = vi.fn();
     const client = { account: { address: account }, writeContract };
 
@@ -33,7 +34,6 @@ describe("submitExecute", () => {
   });
 
   it("runs simulation before writing when no precomputed result is supplied", async () => {
-    const { submitExecute } = await import("./chain.js");
     const writeContract = vi.fn(async () => hash);
     const simulator = vi.fn(async () => ({ ok: true, gasEstimate: 30_000n, warnings: [] }));
     const waitForTransactionReceipt = vi.fn(async () => ({ status: "success" as const }));

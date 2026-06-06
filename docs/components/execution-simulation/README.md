@@ -21,11 +21,11 @@ Implemented fork simulation v1:
 - When no explicit calldata fixture is provided, it builds simulation-only Merchant Moe LBRouter calldata from quote route metadata, minOut, recipient, and deadline.
 - Before calling the router, it reads token-in balance and LBRouter allowance for the swap owner and blocks insufficient state with explicit findings.
 - It can simulate a direct LBRouter call or `AgentVault.execute` on a fork where the vault exists.
-- It records attempted/passed status, gas estimate, revert reason, blockers, and next steps without submitting transactions.
+- It records attempted/passed status, gas estimate, revert reason, blockers, and next steps without submitting to a live network; the Anvil fixture may submit disposable fork-local transactions.
 - `npm run simulate:merchant-moe-fixture` runs the same gate with deterministic quote, reference, balance, allowance, calldata, and injected fork-client state so the dashboard can show a controlled pass while live execution stays disabled.
-- `npm run simulate:merchant-moe-anvil` starts a disposable Mantle mainnet fork, wraps fork-only MNT through the real WMNT contract, approves the real LBRouter, fetches an LBQuoter result, simulates the real router call, records fork/setup evidence, and shuts the fork down.
+- `npm run simulate:merchant-moe-anvil` starts a disposable Mantle mainnet fork, deploys the project `AgentVault`, wraps fork-only MNT and approves the real LBRouter through `AgentVault.execute`, simulates the guarded swap, executes it once on the disposable fork, verifies token deltas plus `AgentDecision`, records fork/setup evidence, and shuts the fork down.
 
-The remaining next steps are richer gas/cost reporting, vault-execute fork coverage, and regression fixtures for failed slippage, stale oracle, and unsafe allowance cases.
+The remaining next steps are richer gas/cost reporting and regression fixtures for paused vault, disallowed router, failed slippage, stale oracle, and unsafe allowance cases.
 
 ## Real Problems It Solves
 

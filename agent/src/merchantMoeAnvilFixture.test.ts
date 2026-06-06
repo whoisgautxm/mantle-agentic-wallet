@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentVaultLimits,
   buildMerchantMoeAnvilArgs,
   loadMerchantMoeAnvilFixtureConfig,
+  parseAgentVaultBytecode,
 } from "./merchantMoeAnvilFixture.js";
 
 describe("Merchant Moe Anvil fixture", () => {
@@ -46,6 +48,22 @@ describe("Merchant Moe Anvil fixture", () => {
         MERCHANT_MOE_ANVIL_PORT: "80",
       }),
     ).toThrow(/between 1024 and 65535/);
+  });
+
+  it("uses bounded vault limits for fork-only setup", () => {
+    expect(agentVaultLimits(100n)).toEqual({
+      spendLimitPerTx: 100n,
+      dailyLimit: 200n,
+    });
+    expect(() => agentVaultLimits(0n)).toThrow(/positive/);
+  });
+
+  it("parses Foundry deployment bytecode safely", () => {
+    expect(parseAgentVaultBytecode(JSON.stringify({ bytecode: { object: "60006000" } }))).toBe("0x60006000");
+    expect(() => parseAgentVaultBytecode("{}")).toThrow(/missing bytecode/);
+    expect(() =>
+      parseAgentVaultBytecode(JSON.stringify({ bytecode: { object: "not-hex" } })),
+    ).toThrow(/valid hex/);
   });
 
   it("reports a missing Anvil binary without crashing the process", async () => {

@@ -61,9 +61,38 @@ export interface MerchantMoeForkSimulationFinding {
     | "VAULT_MISSING"
     | "QUOTE_RISK_BLOCKED"
     | "SIMULATION_FAILED"
+    | "FORK_EXECUTION_FAILED"
     | "LIVE_EXECUTION_DISABLED";
   severity: "warning" | "blocker" | "critical";
   reason: string;
+}
+
+export interface MerchantMoeVaultEvidence {
+  address: `0x${string}`;
+  agent: `0x${string}`;
+  paused: boolean;
+  tokenAllowed: boolean;
+  routerAllowed: boolean;
+  spendLimitPerTx: string;
+  dailyLimit: string;
+  spentToday: string;
+  nonceBeforeSwap: string;
+}
+
+export interface MerchantMoeForkExecutionEvidence {
+  attempted: boolean;
+  passed: boolean;
+  transactionHash?: `0x${string}`;
+  gasUsed?: string;
+  agentDecisionEvents: number;
+  tokenInBefore?: string;
+  tokenInAfter?: string;
+  tokenOutBefore?: string;
+  tokenOutAfter?: string;
+  tokenOutDelta?: string;
+  nonceBefore?: string;
+  nonceAfter?: string;
+  reason?: string;
 }
 
 export interface MerchantMoeForkSimulationReport {
@@ -98,6 +127,8 @@ export interface MerchantMoeForkSimulationReport {
   quoteRisk: MerchantMoeForkReadinessReport["quoteRisk"];
   preflight?: MerchantMoeForkPreflight;
   simulation?: SimulationResult;
+  vaultEvidence?: MerchantMoeVaultEvidence;
+  forkExecution?: MerchantMoeForkExecutionEvidence;
   findings: MerchantMoeForkSimulationFinding[];
   nextSteps: string[];
 }
@@ -316,7 +347,7 @@ function baseFindings(
   findings.push({
     ruleId: "LIVE_EXECUTION_DISABLED",
     severity: "warning",
-    reason: "Fork simulation only; live Merchant Moe execution remains disabled until calldata, allowances, and risk tests pass.",
+    reason: "Live Mantle mainnet execution remains disabled; only disposable fork simulation and fork-local transactions are allowed.",
   });
   return findings;
 }
@@ -652,13 +683,24 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `preflightWarnings: ${report.preflight?.warnings.length ? report.preflight.warnings.join("; ") : "none"}`,
     `gasEstimate: ${report.simulation?.gasEstimate?.toString() ?? "none"}`,
     `revertReason: ${report.simulation?.revertReason ?? "none"}`,
+    `vaultAddress: ${report.vaultEvidence?.address ?? "none"}`,
+    `vaultRouterAllowed: ${report.vaultEvidence?.routerAllowed ?? "none"}`,
+    `vaultTokenAllowed: ${report.vaultEvidence?.tokenAllowed ?? "none"}`,
+    `vaultPaused: ${report.vaultEvidence?.paused ?? "none"}`,
+    `vaultNonceBeforeSwap: ${report.vaultEvidence?.nonceBeforeSwap ?? "none"}`,
+    `forkExecutionAttempted: ${report.forkExecution?.attempted ?? false}`,
+    `forkExecutionPassed: ${report.forkExecution?.passed ?? false}`,
+    `forkExecutionTransaction: ${report.forkExecution?.transactionHash ?? "none"}`,
+    `forkExecutionGasUsed: ${report.forkExecution?.gasUsed ?? "none"}`,
+    `forkExecutionTokenOutDelta: ${report.forkExecution?.tokenOutDelta ?? "none"}`,
+    `forkExecutionAgentDecisionEvents: ${report.forkExecution?.agentDecisionEvents ?? 0}`,
     "findings:",
     ...(report.findings.length
       ? report.findings.map((finding) => `- ${finding.ruleId} [${finding.severity}]: ${finding.reason}`)
       : ["- none"]),
     "nextSteps:",
     ...report.nextSteps.map((step) => `- ${step}`),
-    "execution: disabled; this command never submits transactions",
+    "execution: disabled on Mantle mainnet; fork-local transactions are discarded when Anvil stops",
   ].join("\n");
 }
 
