@@ -95,6 +95,7 @@ interface MerchantMoeForkReport {
 
 interface MerchantMoeForkSimulationReport {
   ok?: boolean;
+  fixtureMode?: boolean;
   executionEnabled?: boolean;
   forkRpcConfigured?: boolean;
   forkSimulationEnabled?: boolean;
@@ -129,6 +130,7 @@ interface MerchantMoeForkSimulationReport {
 
 const readinessCommand = "cd agent && npm run readiness:merchant-moe";
 const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
+const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -338,18 +340,19 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
   return {
     id: "merchant-moe-evidence",
     name: "Merchant Moe",
-    description: "Mainnet-fork simulation",
+    description: report.fixtureMode ? "Controlled fork fixture" : "Mainnet-fork simulation",
     status,
-    label: report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
+    label: report.fixtureMode && report.simulationPassed ? "Fixture pass" : report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
     detail: `${routeLabel(route)}. Fork simulation ${
       report.simulationAttempted ? (report.simulationPassed ? "passed" : "failed") : "has not run"
     }; quote risk is ${risk?.status ?? "unchecked"}: ${risk?.reason ?? "no risk reason captured"}.`,
-    command: simulationCommand,
+    command: report.fixtureMode ? fixtureCommand : simulationCommand,
     artifactPath: displayPath(root, artifact.path),
     updatedAt: event.ts ?? artifact.updatedAt,
     route,
     metrics: [
       { label: "Mode", value: text(report.simulationMode) },
+      { label: "Evidence", value: report.fixtureMode ? "fixture" : "fork" },
       { label: "Attempted", value: yesNo(report.simulationAttempted) },
       { label: "Passed", value: yesNo(report.simulationPassed) },
       { label: "Gas", value: text(report.simulation?.gasEstimate) },

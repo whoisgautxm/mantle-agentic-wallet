@@ -30,6 +30,7 @@ export type MerchantMoeForkSimulationCalldataSource = "env" | "auto" | "missing"
 export interface MerchantMoeForkSimulationConfig {
   forkRpcUrl?: string;
   forkSimulationEnabled: boolean;
+  fixtureMode?: boolean;
   mode: MerchantMoeForkSimulationMode;
   router: `0x${string}`;
   from?: `0x${string}`;
@@ -68,6 +69,7 @@ export interface MerchantMoeForkSimulationReport {
   mode: "mainnet-fork-simulation";
   simulationMode: MerchantMoeForkSimulationMode;
   executionEnabled: false;
+  fixtureMode: boolean;
   forkRpcConfigured: boolean;
   forkSimulationEnabled: boolean;
   simulationAttempted: boolean;
@@ -572,6 +574,7 @@ export async function buildMerchantMoeForkSimulationReport(
     mode: "mainnet-fork-simulation" as const,
     simulationMode: resolvedConfig.mode,
     executionEnabled: false as const,
+    fixtureMode: Boolean(resolvedConfig.fixtureMode),
     forkRpcConfigured: Boolean(resolvedConfig.forkRpcUrl),
     forkSimulationEnabled: resolvedConfig.forkSimulationEnabled,
     simulationAttempted,
@@ -607,6 +610,7 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     "[merchant-moe] mainnet-fork simulation",
     `ok: ${report.ok}`,
     `simulationMode: ${report.simulationMode}`,
+    `fixtureMode: ${report.fixtureMode}`,
     `forkRpcConfigured: ${report.forkRpcConfigured}`,
     `forkSimulationEnabled: ${report.forkSimulationEnabled}`,
     `simulationAttempted: ${report.simulationAttempted}`,

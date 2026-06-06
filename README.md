@@ -308,6 +308,15 @@ npm run simulate:merchant-moe-fork
 
 The simulation command reuses the Merchant Moe quote/readiness path, then checks whether fork simulation can run. Set `MANTLE_MAINNET_FORK_RPC_URL` or `MERCHANT_MOE_FORK_RPC_URL`, `MERCHANT_MOE_ENABLE_FORK_SIMULATION=true`, and `MERCHANT_MOE_SIMULATION_FROM` to attempt a fork-only call. If `MERCHANT_MOE_SWAP_CALLDATA` is blank, the command builds simulation-only LBRouter calldata from the quote route, bin steps, versions, minOut, recipient, and deadline. Before router simulation, it reads token-in `balanceOf` and LBRouter `allowance`; insufficient balance or allowance blocks the call with explicit preflight findings. `MERCHANT_MOE_SWAP_CALLDATA` remains available as an explicit fixture override. `MERCHANT_MOE_SIMULATION_MODE=router-call` simulates a direct LBRouter call; `vault-execute` simulates `AgentVault.execute` on a fork where `MERCHANT_MOE_SIMULATION_VAULT` exists. The command writes `merchant_moe.fork_simulation` JSONL evidence and never submits a transaction.
 
+To prove the full gate can pass without live funds, run the controlled fixture:
+
+```bash
+cd agent
+npm run simulate:merchant-moe-fixture
+```
+
+The fixture uses deterministic Merchant Moe WMNT -> USDC quote metadata, manual reference pricing, fixture token balance/allowance, auto-built LBRouter calldata, and an injected fork client. It writes the same `merchant_moe.fork_simulation` trace event with `fixtureMode: true`, so the dashboard can show a green real-protocol gate while live execution remains disabled.
+
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 
 Example local health snapshot:

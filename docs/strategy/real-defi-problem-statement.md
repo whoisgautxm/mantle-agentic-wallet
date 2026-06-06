@@ -57,6 +57,7 @@ Current project state:
 - Merchant Moe fork-readiness CLI computes min-output/slippage metadata and blocks live execution.
 - Merchant Moe fork-simulation CLI writes JSONL evidence and can auto-build simulation-only LBRouter calldata from quote metadata when fork RPC and simulation account are configured.
 - Merchant Moe fork-simulation CLI checks token-in balance and LBRouter allowance before calling the router.
+- Merchant Moe controlled fixture CLI proves the full quote -> oracle -> calldata -> ERC20 preflight -> simulation gate can pass without live funds.
 - Merchant Moe route presets harden WMNT/stable routes with verified token addresses, decimals, Pyth MNT/USD reference mode, and quote deviation thresholds.
 - Merchant Moe execution is intentionally disabled.
 - ERC20 allowance tracking can watch the LB Router spender.
@@ -66,7 +67,7 @@ Next integration:
 
 1. Keep expanding verified token route config for WMNT/stables and other Mantle pairs.
 2. Build eval runners that replay JSONL traces and grade policy obedience.
-3. Add fork regression fixtures for LBRouter calldata and richer gas/cost reporting.
+3. Add richer gas/cost reporting and regression fixtures for slippage, stale-oracle, and unsafe-allowance failures.
 4. Only then consider guarded live execution.
 
 Primary risk questions:

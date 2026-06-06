@@ -143,6 +143,7 @@ interface MerchantMoeForkSimulationReport {
   ok?: boolean;
   protocolId?: string;
   mode?: string;
+  fixtureMode?: boolean;
   simulationMode?: string;
   executionEnabled?: boolean;
   forkRpcConfigured?: boolean;
@@ -171,6 +172,7 @@ interface MerchantMoeForkSimulationReport {
 }
 
 const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
+const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
 const agentCommand = "cd agent && npm run demo";
 
 function workspaceRoot(): string {
@@ -439,15 +441,15 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
 
   return {
     id: `merchant-moe-fork-${event.ts ?? artifact.updatedAt}`,
-    title: "Merchant Moe fork preflight",
-    description: text(report.simulationMode, "mainnet-fork simulation"),
+    title: report.fixtureMode ? "Merchant Moe fixture preflight" : "Merchant Moe fork preflight",
+    description: report.fixtureMode ? "controlled fixture" : text(report.simulationMode, "mainnet-fork simulation"),
     status: merchantMoeStatus(report),
     label: merchantMoeLabel(report),
     runner: "read-only adapter",
     protocolId: report.protocolId ?? event.protocolId ?? "merchant-moe",
     updatedAt: event.ts ?? artifact.updatedAt,
     artifactPath: displayPath(root, artifact.path),
-    command: simulationCommand,
+    command: report.fixtureMode ? fixtureCommand : simulationCommand,
     action: "swap",
     target: short(report.target ?? report.router),
     selector: "not built",
@@ -463,6 +465,7 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
     }.`,
     metrics: [
       { label: "Simulation", value: report.simulationAttempted ? simulationLabel(simulation) : "blocked" },
+      { label: "Evidence mode", value: report.fixtureMode ? "fixture" : "fork" },
       { label: "Gas estimate", value: text(simulation?.gasEstimate) },
       { label: "Calldata bytes", value: text(report.calldataBytes, "0") },
       { label: "Value wei", value: text(report.valueWei) },

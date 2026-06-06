@@ -84,6 +84,7 @@ interface MerchantMoeForkReadinessReport {
 }
 
 interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport {
+  fixtureMode?: boolean;
   simulationMode?: string;
   simulationAttempted?: boolean;
   simulationPassed?: boolean;
@@ -123,7 +124,8 @@ interface Finding {
   reason?: string;
 }
 
-const command = "cd agent && npm run simulate:merchant-moe-fork";
+const forkCommand = "cd agent && npm run simulate:merchant-moe-fork";
+const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -312,6 +314,17 @@ function simulationStep(report: MerchantMoeForkSimulationReport): ProtocolGateSt
 }
 
 function executionStep(report: MerchantMoeForkSimulationReport): ProtocolGateStep {
+  if (report.fixtureMode && report.ok && report.simulationPassed && report.executionEnabled === false) {
+    return step(
+      "execution",
+      "Live execution",
+      "Final live-trading switch stays disabled until every upstream gate passes.",
+      "ok",
+      "Safely disabled",
+      "Controlled fixture passed while live Merchant Moe execution stayed disabled.",
+    );
+  }
+
   const ready = report.ok && report.simulationPassed && report.executionEnabled === true;
   return step(
     "execution",
@@ -362,7 +375,7 @@ function fallbackGate(root: string, artifact: MissingTraceArtifact | TraceArtifa
     route: "Route not captured",
     artifactPath: "path" in artifact && artifact.path ? displayPath(root, artifact.path) : undefined,
     updatedAt: "updatedAt" in artifact ? artifact.updatedAt : undefined,
-    command,
+    command: fixtureCommand,
     metrics: [],
     steps: [
       step("quote", "Real DEX quote", "Read Merchant Moe LBQuoter.", "warn", "Missing", "No quote event captured."),
@@ -374,7 +387,7 @@ function fallbackGate(root: string, artifact: MissingTraceArtifact | TraceArtifa
       step("execution", "Live execution", "Keep live swaps disabled until all gates pass.", "warn", "Disabled", "Live swaps disabled."),
     ],
     blockers: error ? [error] : [],
-    nextSteps: ["Run cd agent && npm run simulate:merchant-moe-fork."],
+    nextSteps: ["Run cd agent && npm run simulate:merchant-moe-fixture or cd agent && npm run simulate:merchant-moe-fork."],
   };
 }
 
@@ -405,15 +418,25 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     .map(findingText);
   const firstBad = steps.find((entry) => entry.status === "bad");
 
+  const command = normalizedReport.fixtureMode ? fixtureCommand : forkCommand;
+
   return {
     protocolId: "merchant-moe",
     title: "Merchant Moe real-protocol gate",
     status,
-    label: labelFromStatus(status),
-    headline: firstBad ? `Blocked at ${firstBad.name}` : status === "ok" ? "All protocol gates are green" : "Protocol path is partially configured",
+    label: normalizedReport.fixtureMode && status === "ok" ? "Fixture pass" : labelFromStatus(status),
+    headline: firstBad
+      ? `Blocked at ${firstBad.name}`
+      : normalizedReport.fixtureMode && status === "ok"
+        ? "Controlled Merchant Moe fixture passed every upstream gate"
+        : status === "ok"
+          ? "All protocol gates are green"
+          : "Protocol path is partially configured",
     detail:
       firstBad?.detail ??
-      "Merchant Moe evidence is available, but at least one gate is still intentionally cautious before live execution.",
+      (normalizedReport.fixtureMode
+        ? "This is a deterministic fixture proving quote, oracle, calldata, ERC20 state, and simulation plumbing without live funds."
+        : "Merchant Moe evidence is available, but at least one gate is still intentionally cautious before live execution."),
     route: routeLabel(normalizedReport.route),
     artifactPath: displayPath(root, artifact.path),
     updatedAt: event.ts ?? artifact.updatedAt,
@@ -425,6 +448,7 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
       { label: "Allowance", value: text(normalizedReport.preflight?.allowanceRaw) },
       { label: "Simulation", value: normalizedReport.simulationAttempted ? (normalizedReport.simulationPassed ? "passed" : "failed") : "not attempted" },
       { label: "Live execution", value: normalizedReport.executionEnabled ? "enabled" : "disabled" },
+      { label: "Evidence mode", value: normalizedReport.fixtureMode ? "fixture" : "fork" },
     ],
     steps,
     blockers: blockers.slice(0, 5),
