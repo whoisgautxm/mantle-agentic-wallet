@@ -85,6 +85,9 @@ interface MerchantMoeForkReadinessReport {
 
 interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport {
   fixtureMode?: boolean;
+  fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  forkBlockNumber?: string | number;
+  setupTransactionHashes?: string[];
   simulationMode?: string;
   simulationAttempted?: boolean;
   simulationPassed?: boolean;
@@ -126,6 +129,7 @@ interface Finding {
 
 const forkCommand = "cd agent && npm run simulate:merchant-moe-fork";
 const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
+const anvilCommand = "cd agent && npm run simulate:merchant-moe-anvil";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -315,13 +319,16 @@ function simulationStep(report: MerchantMoeForkSimulationReport): ProtocolGateSt
 
 function executionStep(report: MerchantMoeForkSimulationReport): ProtocolGateStep {
   if (report.fixtureMode && report.ok && report.simulationPassed && report.executionEnabled === false) {
+    const anvilBacked = report.fixtureKind === "anvil-mainnet-fork";
     return step(
       "execution",
       "Live execution",
       "Final live-trading switch stays disabled until every upstream gate passes.",
       "ok",
       "Safely disabled",
-      "Controlled fixture passed while live Merchant Moe execution stayed disabled.",
+      anvilBacked
+        ? "Anvil-backed mainnet fork passed while live Merchant Moe execution stayed disabled."
+        : "Controlled fixture passed while live Merchant Moe execution stayed disabled.",
     );
   }
 
@@ -418,23 +425,28 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     .map(findingText);
   const firstBad = steps.find((entry) => entry.status === "bad");
 
-  const command = normalizedReport.fixtureMode ? fixtureCommand : forkCommand;
+  const anvilBacked = normalizedReport.fixtureKind === "anvil-mainnet-fork";
+  const command = anvilBacked ? anvilCommand : normalizedReport.fixtureMode ? fixtureCommand : forkCommand;
 
   return {
     protocolId: "merchant-moe",
     title: "Merchant Moe real-protocol gate",
     status,
-    label: normalizedReport.fixtureMode && status === "ok" ? "Fixture pass" : labelFromStatus(status),
+    label: anvilBacked && status === "ok" ? "Anvil pass" : normalizedReport.fixtureMode && status === "ok" ? "Fixture pass" : labelFromStatus(status),
     headline: firstBad
       ? `Blocked at ${firstBad.name}`
-      : normalizedReport.fixtureMode && status === "ok"
+      : anvilBacked && status === "ok"
+        ? "Real Merchant Moe contracts passed on an Anvil mainnet fork"
+        : normalizedReport.fixtureMode && status === "ok"
         ? "Controlled Merchant Moe fixture passed every upstream gate"
         : status === "ok"
           ? "All protocol gates are green"
           : "Protocol path is partially configured",
     detail:
       firstBad?.detail ??
-      (normalizedReport.fixtureMode
+      (anvilBacked
+        ? `Fork block ${text(normalizedReport.forkBlockNumber)} used real WMNT, LBQuoter, and LBRouter contracts with fork-only setup transactions.`
+        : normalizedReport.fixtureMode
         ? "This is a deterministic fixture proving quote, oracle, calldata, ERC20 state, and simulation plumbing without live funds."
         : "Merchant Moe evidence is available, but at least one gate is still intentionally cautious before live execution."),
     route: routeLabel(normalizedReport.route),
@@ -448,7 +460,9 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
       { label: "Allowance", value: text(normalizedReport.preflight?.allowanceRaw) },
       { label: "Simulation", value: normalizedReport.simulationAttempted ? (normalizedReport.simulationPassed ? "passed" : "failed") : "not attempted" },
       { label: "Live execution", value: normalizedReport.executionEnabled ? "enabled" : "disabled" },
-      { label: "Evidence mode", value: normalizedReport.fixtureMode ? "fixture" : "fork" },
+      { label: "Evidence mode", value: anvilBacked ? "Anvil fork" : normalizedReport.fixtureMode ? "fixture" : "fork" },
+      { label: "Fork block", value: text(normalizedReport.forkBlockNumber) },
+      { label: "Setup txs", value: text(normalizedReport.setupTransactionHashes?.length ?? 0) },
     ],
     steps,
     blockers: blockers.slice(0, 5),

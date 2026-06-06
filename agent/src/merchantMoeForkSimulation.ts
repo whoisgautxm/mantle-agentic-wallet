@@ -31,6 +31,9 @@ export interface MerchantMoeForkSimulationConfig {
   forkRpcUrl?: string;
   forkSimulationEnabled: boolean;
   fixtureMode?: boolean;
+  fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  forkBlockNumber?: bigint;
+  setupTransactionHashes?: `0x${string}`[];
   mode: MerchantMoeForkSimulationMode;
   router: `0x${string}`;
   from?: `0x${string}`;
@@ -70,6 +73,9 @@ export interface MerchantMoeForkSimulationReport {
   simulationMode: MerchantMoeForkSimulationMode;
   executionEnabled: false;
   fixtureMode: boolean;
+  fixtureKind?: MerchantMoeForkSimulationConfig["fixtureKind"];
+  forkBlockNumber?: string;
+  setupTransactionHashes: `0x${string}`[];
   forkRpcConfigured: boolean;
   forkSimulationEnabled: boolean;
   simulationAttempted: boolean;
@@ -82,6 +88,7 @@ export interface MerchantMoeForkSimulationReport {
   recipient?: `0x${string}`;
   deadline?: string;
   valueWei: string;
+  calldataSelector?: `0x${string}`;
   calldataBytes: number;
   route: `0x${string}`[];
   amountIn: string;
@@ -575,6 +582,9 @@ export async function buildMerchantMoeForkSimulationReport(
     simulationMode: resolvedConfig.mode,
     executionEnabled: false as const,
     fixtureMode: Boolean(resolvedConfig.fixtureMode),
+    fixtureKind: resolvedConfig.fixtureKind,
+    forkBlockNumber: resolvedConfig.forkBlockNumber?.toString(),
+    setupTransactionHashes: resolvedConfig.setupTransactionHashes ?? [],
     forkRpcConfigured: Boolean(resolvedConfig.forkRpcUrl),
     forkSimulationEnabled: resolvedConfig.forkSimulationEnabled,
     simulationAttempted,
@@ -587,6 +597,7 @@ export async function buildMerchantMoeForkSimulationReport(
     recipient: resolvedConfig.recipient,
     deadline: resolvedConfig.deadline?.toString(),
     valueWei: resolvedConfig.valueWei.toString(),
+    calldataSelector: resolvedConfig.calldata?.slice(0, 10) as `0x${string}` | undefined,
     calldataBytes: calldataBytes(resolvedConfig.calldata),
     route: readiness.route,
     amountIn: readiness.amountIn,
@@ -611,6 +622,9 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `ok: ${report.ok}`,
     `simulationMode: ${report.simulationMode}`,
     `fixtureMode: ${report.fixtureMode}`,
+    `fixtureKind: ${report.fixtureKind ?? "none"}`,
+    `forkBlockNumber: ${report.forkBlockNumber ?? "none"}`,
+    `setupTransactions: ${report.setupTransactionHashes.length ? report.setupTransactionHashes.join(", ") : "none"}`,
     `forkRpcConfigured: ${report.forkRpcConfigured}`,
     `forkSimulationEnabled: ${report.forkSimulationEnabled}`,
     `simulationAttempted: ${report.simulationAttempted}`,
@@ -621,6 +635,7 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `calldataSource: ${report.calldataSource}`,
     `recipient: ${report.recipient ?? "none"}`,
     `deadline: ${report.deadline ?? "none"}`,
+    `calldataSelector: ${report.calldataSelector ?? "none"}`,
     `calldataBytes: ${report.calldataBytes}`,
     `valueWei: ${report.valueWei}`,
     `route: ${report.route.join(" -> ")}`,

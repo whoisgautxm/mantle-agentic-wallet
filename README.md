@@ -317,6 +317,16 @@ npm run simulate:merchant-moe-fixture
 
 The fixture uses deterministic Merchant Moe WMNT -> USDC quote metadata, manual reference pricing, fixture token balance/allowance, auto-built LBRouter calldata, and an injected fork client. It writes the same `merchant_moe.fork_simulation` trace event with `fixtureMode: true`, so the dashboard can show a green real-protocol gate while live execution remains disabled.
 
+For stronger integration evidence against the actual deployed Mantle contracts, run:
+
+```bash
+cd agent
+set -a && source ../.env && set +a
+npm run simulate:merchant-moe-anvil
+```
+
+This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, wraps fork-only MNT into real forked WMNT, sets an exact bounded router approval, fetches the real Merchant Moe quote, and simulates the real router call. It records the fork block and local setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
+
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 
 Example local health snapshot:

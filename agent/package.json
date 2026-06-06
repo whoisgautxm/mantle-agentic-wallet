@@ -15,6 +15,7 @@
     "readiness:merchant-moe": "tsx src/merchantMoeForkReadiness.ts",
     "simulate:merchant-moe-fork": "tsx src/merchantMoeForkSimulation.ts",
     "simulate:merchant-moe-fixture": "tsx src/merchantMoeForkFixture.ts",
+    "simulate:merchant-moe-anvil": "tsx src/merchantMoeAnvilFixture.ts",
     "readiness:lending": "tsx src/lendingReadiness.ts",
     "eval:traces": "tsx src/traceEval.ts",
     "eval:scenarios": "tsx src/scenarioEval.ts",

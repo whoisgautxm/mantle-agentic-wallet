@@ -96,6 +96,9 @@ interface MerchantMoeForkReport {
 interface MerchantMoeForkSimulationReport {
   ok?: boolean;
   fixtureMode?: boolean;
+  fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  forkBlockNumber?: string | number;
+  setupTransactionHashes?: string[];
   executionEnabled?: boolean;
   forkRpcConfigured?: boolean;
   forkSimulationEnabled?: boolean;
@@ -131,6 +134,7 @@ interface MerchantMoeForkSimulationReport {
 const readinessCommand = "cd agent && npm run readiness:merchant-moe";
 const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
 const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
+const anvilCommand = "cd agent && npm run simulate:merchant-moe-anvil";
 
 function workspaceRoot(): string {
   return path.basename(process.cwd()) === "web" ? path.dirname(process.cwd()) : process.cwd();
@@ -336,23 +340,26 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
   const findings = report.findings ?? [];
   const status = forkSimulationStatus(report);
   const revertReason = report.simulation?.revertReason ?? report.simulation?.reason;
+  const anvilBacked = report.fixtureKind === "anvil-mainnet-fork";
 
   return {
     id: "merchant-moe-evidence",
     name: "Merchant Moe",
-    description: report.fixtureMode ? "Controlled fork fixture" : "Mainnet-fork simulation",
+    description: anvilBacked ? "Anvil-backed mainnet fork" : report.fixtureMode ? "Controlled fork fixture" : "Mainnet-fork simulation",
     status,
-    label: report.fixtureMode && report.simulationPassed ? "Fixture pass" : report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
+    label: anvilBacked && report.simulationPassed ? "Anvil pass" : report.fixtureMode && report.simulationPassed ? "Fixture pass" : report.simulationPassed ? "Simulated" : report.simulationAttempted ? "Failed" : "Blocked",
     detail: `${routeLabel(route)}. Fork simulation ${
       report.simulationAttempted ? (report.simulationPassed ? "passed" : "failed") : "has not run"
     }; quote risk is ${risk?.status ?? "unchecked"}: ${risk?.reason ?? "no risk reason captured"}.`,
-    command: report.fixtureMode ? fixtureCommand : simulationCommand,
+    command: anvilBacked ? anvilCommand : report.fixtureMode ? fixtureCommand : simulationCommand,
     artifactPath: displayPath(root, artifact.path),
     updatedAt: event.ts ?? artifact.updatedAt,
     route,
     metrics: [
       { label: "Mode", value: text(report.simulationMode) },
-      { label: "Evidence", value: report.fixtureMode ? "fixture" : "fork" },
+      { label: "Evidence", value: anvilBacked ? "Anvil fork" : report.fixtureMode ? "fixture" : "fork" },
+      { label: "Fork block", value: text(report.forkBlockNumber) },
+      { label: "Setup txs", value: text(report.setupTransactionHashes?.length ?? 0) },
       { label: "Attempted", value: yesNo(report.simulationAttempted) },
       { label: "Passed", value: yesNo(report.simulationPassed) },
       { label: "Gas", value: text(report.simulation?.gasEstimate) },

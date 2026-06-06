@@ -16,6 +16,7 @@ describe("Merchant Moe controlled fork fixture", () => {
 
     expect(report.ok).toBe(true);
     expect(report.fixtureMode).toBe(true);
+    expect(report.fixtureKind).toBe("deterministic");
     expect(report.executionEnabled).toBe(false);
     expect(report.calldataSource).toBe("auto");
     expect(report.preflight?.status).toBe("ok");

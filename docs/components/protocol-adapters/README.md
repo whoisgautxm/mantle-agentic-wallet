@@ -106,6 +106,7 @@ Implemented readiness step:
 - `npm run simulate:merchant-moe-fork` adds the Phase C fork-simulation gate. It blocks until fork RPC and simulation account are configured, then builds simulation-only LBRouter calldata from the quote metadata when no explicit calldata fixture is provided.
 - ERC20 preflight reads token-in balance and LBRouter allowance before the router call, blocking insufficient state before protocol simulation.
 - `npm run simulate:merchant-moe-fixture` runs a deterministic controlled fixture that passes quote, oracle/reference, calldata, balance, allowance, and injected simulation gates while keeping live execution disabled.
+- `npm run simulate:merchant-moe-anvil` validates the same route against real WMNT, LBQuoter, and LBRouter bytecode/state on a disposable Mantle mainnet fork.
 - Fork simulation can run as a direct LBRouter call or fork-local `AgentVault.execute` call without submitting transactions.
 - The dashboard reads the latest Merchant Moe quote-smoke, fork-readiness, or fork-simulation JSONL trace event and surfaces route, output, min-output, slippage, quote-risk, simulation status, blockers, and next steps.
 

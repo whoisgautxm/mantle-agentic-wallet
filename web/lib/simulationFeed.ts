@@ -144,6 +144,9 @@ interface MerchantMoeForkSimulationReport {
   protocolId?: string;
   mode?: string;
   fixtureMode?: boolean;
+  fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  forkBlockNumber?: string | number;
+  setupTransactionHashes?: string[];
   simulationMode?: string;
   executionEnabled?: boolean;
   forkRpcConfigured?: boolean;
@@ -155,6 +158,7 @@ interface MerchantMoeForkSimulationReport {
   from?: string;
   vault?: string;
   valueWei?: string | number;
+  calldataSelector?: string;
   calldataBytes?: string | number;
   route?: string[];
   amountIn?: string | number;
@@ -173,6 +177,7 @@ interface MerchantMoeForkSimulationReport {
 
 const simulationCommand = "cd agent && npm run simulate:merchant-moe-fork";
 const fixtureCommand = "cd agent && npm run simulate:merchant-moe-fixture";
+const anvilCommand = "cd agent && npm run simulate:merchant-moe-anvil";
 const agentCommand = "cd agent && npm run demo";
 
 function workspaceRoot(): string {
@@ -438,21 +443,22 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
   const report = event.report ?? {};
   const blocker = primaryBlocker(report);
   const simulation = report.simulation;
+  const anvilBacked = report.fixtureKind === "anvil-mainnet-fork";
 
   return {
     id: `merchant-moe-fork-${event.ts ?? artifact.updatedAt}`,
-    title: report.fixtureMode ? "Merchant Moe fixture preflight" : "Merchant Moe fork preflight",
-    description: report.fixtureMode ? "controlled fixture" : text(report.simulationMode, "mainnet-fork simulation"),
+    title: anvilBacked ? "Merchant Moe Anvil preflight" : report.fixtureMode ? "Merchant Moe fixture preflight" : "Merchant Moe fork preflight",
+    description: anvilBacked ? "real mainnet-fork contracts" : report.fixtureMode ? "controlled fixture" : text(report.simulationMode, "mainnet-fork simulation"),
     status: merchantMoeStatus(report),
     label: merchantMoeLabel(report),
     runner: "read-only adapter",
     protocolId: report.protocolId ?? event.protocolId ?? "merchant-moe",
     updatedAt: event.ts ?? artifact.updatedAt,
     artifactPath: displayPath(root, artifact.path),
-    command: report.fixtureMode ? fixtureCommand : simulationCommand,
+    command: anvilBacked ? anvilCommand : report.fixtureMode ? fixtureCommand : simulationCommand,
     action: "swap",
     target: short(report.target ?? report.router),
-    selector: "not built",
+    selector: text(report.calldataSelector, "not built"),
     valueWei: text(report.valueWei),
     calldataBytes: text(report.calldataBytes, "0"),
     simulationLabel: report.simulationAttempted ? simulationLabel(simulation) : "blocked",
@@ -465,7 +471,9 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
     }.`,
     metrics: [
       { label: "Simulation", value: report.simulationAttempted ? simulationLabel(simulation) : "blocked" },
-      { label: "Evidence mode", value: report.fixtureMode ? "fixture" : "fork" },
+      { label: "Evidence mode", value: anvilBacked ? "Anvil fork" : report.fixtureMode ? "fixture" : "fork" },
+      { label: "Fork block", value: text(report.forkBlockNumber) },
+      { label: "Setup txs", value: text(report.setupTransactionHashes?.length ?? 0) },
       { label: "Gas estimate", value: text(simulation?.gasEstimate) },
       { label: "Calldata bytes", value: text(report.calldataBytes, "0") },
       { label: "Value wei", value: text(report.valueWei) },

@@ -90,6 +90,7 @@ export async function runMerchantMoeForkFixture(
       MERCHANT_MOE_SIMULATION_RATIONALE: "Merchant Moe controlled fork fixture",
     }),
     fixtureMode: true,
+    fixtureKind: "deterministic" as const,
   };
   const report = await buildMerchantMoeForkSimulationReport(readiness, simulationConfig, createMerchantMoeFixtureClient(quote), quote);
   write(formatMerchantMoeForkSimulation(report));
