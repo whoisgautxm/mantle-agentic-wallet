@@ -2,7 +2,17 @@ import { randomUUID } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { parseEther } from "viem";
-import { readVaultState, submitExecute, isTargetAllowed, readPrice, ExecuteRevertedError } from "./chain.js";
+import {
+  readVaultState,
+  submitExecute,
+  isTargetAllowed,
+  readPrice,
+  getGasPriceWei,
+  getHeadBlock,
+  ExecuteRevertedError,
+} from "./chain.js";
+import { evaluateCostGate } from "./risk/costGate.js";
+import { checkSnapshotFreshness } from "./risk/freshness.js";
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { chain, aiVaultAddress, dexAddress, agentAccount, mockTokenAddress } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
@@ -35,6 +45,12 @@ const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const ESTIMATED_EXECUTION_COST_BPS = Number(process.env.AGENT_ESTIMATED_EXECUTION_COST_BPS ?? "60");
+// P1 gates (default off — enable deliberately for a controlled run; see live-run report sections 6, 10).
+const DYNAMIC_COST_GATE = (process.env.AGENT_DYNAMIC_COST_GATE ?? "0") === "1";
+const MAX_BLOCK_DRIFT = BigInt(process.env.AGENT_MAX_BLOCK_DRIFT ?? "0"); // 0 disables the freshness guard
+const FEE_BPS = Number(process.env.AGENT_FEE_BPS ?? "0");
+const SLIPPAGE_BPS = Number(process.env.EXECUTION_SLIPPAGE_BPS ?? "100");
+const COST_BUFFER_BPS = Number(process.env.AGENT_COST_BUFFER_BPS ?? "10");
 const AGENT_STRATEGY = (process.env.AGENT_STRATEGY ?? "model").toLowerCase();
 if (AGENT_STRATEGY !== "model" && AGENT_STRATEGY !== "ensemble") {
   throw new Error("AGENT_STRATEGY must be model or ensemble");
@@ -256,6 +272,53 @@ async function tick(tickId: string, context: string): Promise<void> {
       portfolioAfter: portfolio,
     });
     return;
+  }
+
+  // P1 quote-to-submit freshness: re-check head drift before submitting against a possibly-moved oracle floor.
+  if (MAX_BLOCK_DRIFT > 0n && state.blockNumber !== undefined) {
+    const headBlock = await getHeadBlock();
+    const fresh = checkSnapshotFreshness({ snapshotBlock: state.blockNumber, headBlock, maxDriftBlocks: MAX_BLOCK_DRIFT });
+    if (!fresh.ok) {
+      console.log("[guard] blocked: stale snapshot —", fresh.reason);
+      await recordTrace("agent.final_action", {
+        tickId,
+        runner: "ai",
+        outcome: "blocked",
+        reason: `stale snapshot: ${fresh.reason}`,
+        decision,
+        freshness: { driftBlocks: fresh.driftBlocks.toString(), maxDriftBlocks: MAX_BLOCK_DRIFT.toString() },
+        portfolioAfter: portfolio,
+      });
+      return;
+    }
+  }
+
+  // P1 dynamic execution-cost gate: block uneconomic trades using observed gas vs trade notional.
+  if (DYNAMIC_COST_GATE) {
+    const gasPriceWei = await getGasPriceWei();
+    const tradeNotionalWei = decision.valueWei > 0n ? decision.valueWei : decision.expectedOutWei ?? 0n;
+    const gate = evaluateCostGate({
+      expectedEdgeBps: decision.analysis?.expectedEdgeBps ?? 0,
+      feeBps: FEE_BPS,
+      slippageBps: SLIPPAGE_BPS,
+      bufferBps: COST_BUFFER_BPS,
+      gasEstimateWei: simulation.gasEstimate ?? 0n,
+      gasPriceWei,
+      tradeNotionalWei,
+    });
+    if (!gate.ok) {
+      console.log("[guard] blocked: cost gate —", gate.reason);
+      await recordTrace("agent.final_action", {
+        tickId,
+        runner: "ai",
+        outcome: "blocked",
+        reason: `cost gate: ${gate.reason}`,
+        decision,
+        costGate: { gasBps: gate.gasBps, totalCostBps: gate.totalCostBps },
+        portfolioAfter: portfolio,
+      });
+      return;
+    }
   }
 
   const { hash, gasUsedWei, gasCostWei } = await submitExecute(aiVaultAddress, decision, undefined, { simulation });

@@ -83,6 +83,14 @@ async function retryRead<T>(label: string, read: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
+export async function getGasPriceWei(): Promise<bigint> {
+  return retryRead("gasPrice", () => publicClient.getGasPrice());
+}
+
+export async function getHeadBlock(): Promise<bigint> {
+  return retryRead("headBlock", () => publicClient.getBlockNumber());
+}
+
 export async function readPrice(blockNumber?: bigint): Promise<bigint> {
   return retryRead(
     "price",

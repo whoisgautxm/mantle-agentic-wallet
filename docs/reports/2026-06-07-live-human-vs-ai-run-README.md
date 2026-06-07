@@ -10,7 +10,11 @@
 > - **P0.4 Real cost accounting — DONE.** `submitExecute` returns realized `gasUsedWei`/`gasCostWei`; runners trace per-tick + cumulative gas and gas-adjusted ROI; pure `gasAdjustedRoiBps` helper tested against this report's −452 bps figure. (commit `796ccc7`)
 > - **P0.5 Dashboard provenance — DONE.** Root cause fixed: the dashboard read a stale duplicate `web/data/addresses.json` (old vaults `0xd9a1…`/`0xD786…`); all importers now read the single `shared/addresses.json`, and the copy was deleted so it cannot drift again. Added a run-provenance banner (LIVE/SNAPSHOT badge, deployment addresses + deploy block, block range, vault-only accounting label) that explicitly states when the standing reflects a tracked snapshot rather than a live run. Web build/lint/typecheck/tests green.
 >
-> **The full P0 measurement-integrity slice is now complete.** Remaining are the P1 items (explicit ensemble modes, recovery-state logic, dynamic gas cost gate, quote-to-submit freshness re-quote, and a seeded/scripted keeper to remove the `Math.random` race at its source).
+> **The full P0 measurement-integrity slice is now complete.**
+>
+> **P1 progress (started):** the **dynamic execution-cost gate** (`risk/costGate.ts`) and **quote-to-submit freshness guard** (`risk/freshness.ts`) are implemented as pure, tested modules and wired into the AI submit path, env-gated (`AGENT_DYNAMIC_COST_GATE`, `AGENT_MAX_BLOCK_DRIFT`, default off) so they are ready for a controlled run without changing default behavior. The cost gate blocks a trade whose expected edge can't clear observed gas+fees+slippage; the freshness guard skips submission when the pinned observation block has drifted too far behind head (the OracleFloorTooLow race in section 10). 170 agent + 40 forge green.
+>
+> Remaining P1 items (explicit ensemble modes, recovery-state logic, dynamic gas cost gate, quote-to-submit freshness re-quote, and a seeded/scripted keeper to remove the `Math.random` race at its source).
 
 
 Run date: June 7, 2026  
