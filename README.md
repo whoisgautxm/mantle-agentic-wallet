@@ -6,6 +6,7 @@
 **Network:** Mantle Sepolia (`chainId` `5003`)  
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
+[![CI](https://github.com/whoisgautxm/mantle-agentic-wallet/actions/workflows/ci.yml/badge.svg)](https://github.com/whoisgautxm/mantle-agentic-wallet/actions/workflows/ci.yml)
 ![Contracts](https://img.shields.io/badge/forge%20tests-34%2F34-brightgreen)
 ![Agent](https://img.shields.io/badge/agent%20tests-149%2F149-brightgreen)
 ![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
