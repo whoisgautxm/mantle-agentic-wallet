@@ -1,5 +1,6 @@
 import type { MarketFeatures } from "../marketFeatures.js";
 import type { VaultState } from "../types.js";
+import { deriveRecoveryPhase } from "./recoveryState.js";
 
 const BPS = 10_000n;
 
@@ -39,6 +40,8 @@ export interface EnsembleConfig {
   shockThresholdBps: number;
   shockRecoveryMinBps: number;
   shockRecoveryBuyPercent: number;
+  recoveryProbeEnabled: boolean;
+  recoveryProbePercent: number;
 }
 
 export const DEFAULT_ENSEMBLE_CONFIG: EnsembleConfig = {
@@ -55,7 +58,19 @@ export const DEFAULT_ENSEMBLE_CONFIG: EnsembleConfig = {
   shockThresholdBps: 1_200,
   shockRecoveryMinBps: 100,
   shockRecoveryBuyPercent: 15,
+  // Recovery probe defaults OFF — a strategy change that must clear the held-out bar before becoming default.
+  recoveryProbeEnabled: false,
+  recoveryProbePercent: 20,
 };
+
+/// Ensemble config from env. `ENSEMBLE_RECOVERY_PROBE=1` turns on the recovery-state probe so the
+/// held-out benchmark can measure it before it is adopted as default behavior.
+export function loadEnsembleConfigFromEnv(env = process.env): EnsembleConfig {
+  return {
+    ...DEFAULT_ENSEMBLE_CONFIG,
+    recoveryProbeEnabled: (env.ENSEMBLE_RECOVERY_PROBE ?? "0") === "1",
+  };
+}
 
 function minBigint(...values: bigint[]): bigint {
   return values.reduce((lowest, value) => (value < lowest ? value : lowest));
@@ -249,6 +264,25 @@ export function regimeRoutedEnsemble(
       );
     }
     return hold(expectedEdgeBps, "Ensemble found no cost-worthy deviation from the observed range mean.");
+  }
+
+  // Recovery probe: a downtrend that has stabilized and bounced off its low is the upside the
+  // stateless classifier missed. Take a small, cost-gated entry rather than holding through it.
+  if (config.recoveryProbeEnabled && capacity > 0n) {
+    const recovery = deriveRecoveryPhase(priceHistory);
+    if (recovery.phase === "recovery_probe") {
+      return costGate(
+        {
+          action: "buy",
+          amountMntWei: percentage(capacity, config.recoveryProbePercent),
+          sizePercent: config.recoveryProbePercent,
+          expectedEdgeBps: recovery.bounceBps,
+          rationale: "Ensemble took a small recovery probe after a confirmed downtrend stabilized and bounced off the low.",
+        },
+        input,
+        config,
+      );
+    }
   }
 
   return hold(0, "Ensemble held because the observed regime was uncertain.");

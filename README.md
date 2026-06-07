@@ -83,7 +83,9 @@ A three-request live `gpt-5-mini` smoke passed with zero model errors and preser
 
 The shared deterministic ensemble now follows momentum in confirmed trends, preserves capital in downtrends, uses cost-gated mean reversion in ranges, and stays conservative around shocks. On the untouched seed-`20260607` held-out set it averaged **+63 bps**, versus momentum at `+17`, DCA at `-48`, mean reversion at `-24`, and hold at `0`; it beat momentum on **58/100** paths and improved worst drawdown from `-31` to `-28 bps`.
 
-Fresh seed robustness runs also beat momentum on average: `+57` versus `+23 bps` for seed `20260608`, and `+66` versus `+25 bps` for seed `99999999`. Their path win rates were `44/100` and `49/100`, so the evidence supports stronger average performance, not universal path dominance. The offline evaluator uses the ensemble by default. Live model decisions remain model-led unless `AGENT_STRATEGY=ensemble` enables the deterministic veto/cap prior. Full methodology: [ensemble strategy report](docs/reports/2026-06-07-ensemble-strategy.md).
+Fresh seed robustness runs also beat momentum on average: `+57` versus `+23 bps` for seed `20260608`, and `+66` versus `+25 bps` for seed `99999999`. Their path win rates were `44/100` and `49/100`, so the evidence supports stronger average performance, not universal path dominance. The offline evaluator uses the ensemble by default. Live model decisions remain model-led unless `AGENT_STRATEGY=ensemble` enables the deterministic veto/cap prior. Full methodology: [ensemble strategy report](docs/reports/2026-06-07-ensemble-strategy.md) and the [multi-seed + recovery-probe report](docs/reports/2026-06-07-recovery-and-heldout-eval.md).
+
+A recovery-state machine (`strategies/recoveryState.ts`, `ENSEMBLE_RECOVERY_PROBE=1`) is implemented and unit-tested, but it is **off by default**: on the held-out set it produced no measurable change (recovery-shaped paths classify as range/trend before reaching its branch), so per our acceptance discipline it is not claimed as an improvement.
 
 ---
 

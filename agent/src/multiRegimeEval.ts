@@ -14,6 +14,7 @@ import { DEFAULT_RISK_LIMITS } from "./risk/limits.js";
 import type { RiskResult } from "./risk/types.js";
 import {
   regimeRoutedEnsemble,
+  loadEnsembleConfigFromEnv,
   type StrategyFunction,
   type StrategyIntent,
 } from "./strategies/ensemble.js";
@@ -632,7 +633,7 @@ function estimatedCostBps(costs: BenchmarkCosts, baselineBuyWei: bigint): number
 }
 
 export function createOfflineBenchmarkDecisionRunner(
-  strategy: StrategyFunction = regimeRoutedEnsemble,
+  strategy: StrategyFunction = (input) => regimeRoutedEnsemble(input, loadEnsembleConfigFromEnv()),
 ): BenchmarkDecisionRunner {
   return async ({ tickIndex, state, priceHistory, adapter, costs, baselineBuyWei }) => {
     const features = computeMarketFeatures(priceHistory);
