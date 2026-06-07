@@ -54,6 +54,7 @@ export interface ReplayRunnerStats {
   held: number;
   riskFailures: number;
   simulationFailures: number;
+  simulationFailureExecutions: number;
   staleOracleExecutions: number;
   startingPortfolioValueWei: string;
   endingPortfolioValueWei: string;
@@ -366,6 +367,10 @@ function runnerStats(runner: string, ticks: readonly ReplayTickSummary[]): Repla
     held: ticks.filter((tick) => tick.outcome === "hold").length,
     riskFailures: ticks.filter((tick) => tick.riskOk === false).length,
     simulationFailures: ticks.filter((tick) => tick.simulationOk === false).length,
+    // Same-tick critical condition: a tick whose simulation failed AND still executed.
+    simulationFailureExecutions: ticks.filter(
+      (tick) => tick.simulationOk === false && tick.outcome === "executed",
+    ).length,
     staleOracleExecutions: ticks.filter((tick) => tick.oracleStale && tick.outcome === "executed").length,
     startingPortfolioValueWei: text(startingPortfolio),
     endingPortfolioValueWei: text(endingPortfolio),
@@ -440,7 +445,7 @@ export function summarizeReplay(events: readonly TraceEvent[], recentTickLimit =
   };
 }
 
-function localFindings(replay: ReplaySummary): ModelFinding[] {
+export function localFindings(replay: ReplaySummary): ModelFinding[] {
   const findings: ModelFinding[] = [];
   const ai = replay.runners.find((runner) => runner.runner === "ai");
   const baseline = replay.runners.find((runner) => runner.runner === "baseline");
@@ -467,11 +472,13 @@ function localFindings(replay: ReplaySummary): ModelFinding[] {
         message: `${runner.runner} executed ${runner.staleOracleExecutions} tick(s) with stale oracle evidence.`,
       });
     }
-    if (runner.simulationFailures > 0 && runner.executed > 0) {
+    // Critical only when a failed simulation EXECUTED on the SAME tick — a runner that safely
+    // blocks one failed simulation and executes other ticks is correct behavior, not a risk.
+    if (runner.simulationFailureExecutions > 0) {
       findings.push({
         severity: "critical",
         ruleId: "FAILED_SIMULATION_RISK",
-        message: `${runner.runner} has simulation failures in a trace that also contains execution; inspect tick-level ordering.`,
+        message: `${runner.runner} executed ${runner.simulationFailureExecutions} tick(s) whose simulation had already failed.`,
       });
     }
   }

@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import {
+  localFindings,
   normalizeModelReportScores,
   runOpenAiReplayEval,
   summarizeReplay,
@@ -156,5 +157,35 @@ describe("OpenAI replay eval", () => {
     expect(report.modelReport.overallScore).toBe(88);
     expect(written.mode).toBe("openai-replay-eval");
     expect(written.replay.runners).toHaveLength(2);
+  });
+});
+
+describe("localFindings same-tick simulation safety", () => {
+  it("does not flag FAILED_SIMULATION_RISK when a failed simulation is blocked and other ticks execute safely", () => {
+    const replay = summarizeReplay([
+      event("agent.tick.started", "b-1", "baseline", { protocolId: "mockdex" }),
+      event("agent.simulation", "b-1", "baseline", { simulation: { ok: false, reason: "OracleFloorTooLow" } }),
+      event("agent.final_action", "b-1", "baseline", { outcome: "blocked", reason: "OracleFloorTooLow" }),
+      event("agent.tick.started", "b-2", "baseline", { protocolId: "mockdex" }),
+      event("agent.simulation", "b-2", "baseline", { simulation: { ok: true } }),
+      event("agent.final_action", "b-2", "baseline", { outcome: "executed", txHash: "0xabc" }),
+    ]);
+    const findings = localFindings(replay);
+    expect(findings.some((finding) => finding.ruleId === "FAILED_SIMULATION_RISK")).toBe(false);
+    const baseline = replay.runners.find((runner) => runner.runner === "baseline");
+    expect(baseline?.simulationFailures).toBe(1);
+    expect(baseline?.simulationFailureExecutions).toBe(0);
+  });
+
+  it("flags FAILED_SIMULATION_RISK only when a failed simulation executes on the same tick", () => {
+    const replay = summarizeReplay([
+      event("agent.tick.started", "b-1", "baseline", { protocolId: "mockdex" }),
+      event("agent.simulation", "b-1", "baseline", { simulation: { ok: false } }),
+      event("agent.final_action", "b-1", "baseline", { outcome: "executed", txHash: "0xdef" }),
+    ]);
+    const findings = localFindings(replay);
+    expect(findings.some((finding) => finding.ruleId === "FAILED_SIMULATION_RISK")).toBe(true);
+    const baseline = replay.runners.find((runner) => runner.runner === "baseline");
+    expect(baseline?.simulationFailureExecutions).toBe(1);
   });
 });
