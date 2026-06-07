@@ -1,5 +1,16 @@
+import type { MarketFeatures, MarketRegime } from "./marketFeatures.js";
+
+export interface DecisionAnalysis {
+  regime: MarketRegime;
+  confidence: number;
+  expectedEdgeBps: number;
+  sizePercent: number;
+  invalidationCondition: string;
+  marketFeatures?: MarketFeatures;
+}
+
 export type Decision =
-  | { kind: "hold"; rationale: string }
+  | { kind: "hold"; rationale: string; analysis?: DecisionAnalysis }
   | {
       kind: "execute";
       target: `0x${string}`;
@@ -8,6 +19,7 @@ export type Decision =
       rationale: string;
       action?: "pay" | "buy" | "sell";
       amountTokenWei?: bigint;
+      analysis?: DecisionAnalysis;
     };
 
 export interface VaultState {

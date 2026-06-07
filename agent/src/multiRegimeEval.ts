@@ -5,18 +5,22 @@ import { config as loadDotenv } from "dotenv";
 import OpenAI from "openai";
 import { formatEther, parseEther } from "viem";
 import { decide, normalizeTradeIntent, type ReasoningClient } from "./brain.js";
+import { computeMarketFeatures } from "./marketFeatures.js";
 import { portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protocols/types.js";
 import { evaluateRisk } from "./risk/engine.js";
 import { DEFAULT_RISK_LIMITS } from "./risk/limits.js";
 import type { RiskResult } from "./risk/types.js";
-import type { Decision, VaultState } from "./types.js";
+import type { Decision, DecisionAnalysis, VaultState } from "./types.js";
 
 const DEX = "0x1111111111111111111111111111111111111111" as const;
 const ONE = 10n ** 18n;
 const BPS = 10_000n;
 const MAX_HISTORY = 12;
+const COMPARATOR_NAMES = ["dca", "momentum", "mean-reversion", "hold"] as const;
+
+export type BenchmarkComparator = (typeof COMPARATOR_NAMES)[number];
 
 export interface MarketRegimeFixture {
   id: string;
@@ -82,13 +86,14 @@ export interface BenchmarkTickResult {
   outcome: "executed" | "blocked" | "hold" | "error";
   ruleId: string;
   rationale: string;
+  analysis?: DecisionAnalysis;
   portfolioValueWei: string;
   portfolioRoiBps: string;
   cumulativeCostsWei: string;
 }
 
 export interface BenchmarkRunnerResult {
-  runner: "ai" | "baseline";
+  runner: "ai" | BenchmarkComparator;
   ticks: number;
   executed: number;
   blocked: number;
@@ -117,6 +122,7 @@ export interface BenchmarkRegimeResult {
   aiEdgeBps: string;
   ai: BenchmarkRunnerResult;
   baseline: BenchmarkRunnerResult;
+  comparators: Record<BenchmarkComparator, BenchmarkRunnerResult>;
 }
 
 export interface MultiRegimeBenchmarkReport {
@@ -145,6 +151,8 @@ export interface MultiRegimeBenchmarkReport {
     aiTotalCostsWei: string;
     baselineTotalCostsWei: string;
     modelErrors: number;
+    comparatorAverageNetRoiBps: Record<BenchmarkComparator, string>;
+    aiWinsByComparator: Record<BenchmarkComparator, number>;
   };
   regimes: BenchmarkRegimeResult[];
 }
@@ -378,6 +386,7 @@ function markAccount(account: MutableAccount, tick: number, priceWei: bigint, de
     outcome: settlement.outcome,
     ruleId: settlement.ruleId,
     rationale: decision.rationale,
+    analysis: decision.analysis,
     portfolioValueWei: valueWei.toString(),
     portfolioRoiBps: roiBps(valueWei, account.initialPortfolioWei).toString(),
     cumulativeCostsWei: account.costsPaidWei.toString(),
@@ -400,7 +409,85 @@ async function buildBaselineDecision(
   return planToDecision(adapter.buildPlan(normalized, quote), normalized.rationale);
 }
 
-function finalizeRunner(runner: "ai" | "baseline", account: MutableAccount, finalPriceWei: bigint): BenchmarkRunnerResult {
+async function buildIntentDecision(
+  account: MutableAccount,
+  adapter: ProtocolAdapter,
+  intent: TradeIntent | { action: "hold"; rationale: string },
+  nowSeconds: bigint,
+): Promise<Decision> {
+  const normalized = normalizeTradeIntent(intent, account.state, nowSeconds);
+  if (normalized.action === "hold") return { kind: "hold", rationale: normalized.rationale };
+  const quote = await adapter.quote(normalized);
+  return planToDecision(adapter.buildPlan(normalized, quote), normalized.rationale);
+}
+
+async function buildComparatorDecision(
+  comparator: BenchmarkComparator,
+  account: MutableAccount,
+  adapter: ProtocolAdapter,
+  baselineBuyWei: bigint,
+  priceHistory: readonly bigint[],
+  nowSeconds: bigint,
+): Promise<Decision> {
+  if (comparator === "dca") return buildBaselineDecision(account, adapter, baselineBuyWei, nowSeconds);
+  if (comparator === "hold") return { kind: "hold", rationale: "Always-hold comparator." };
+  if (priceHistory.length < 2) return { kind: "hold", rationale: `${comparator} comparator needs more history.` };
+
+  const current = priceHistory[priceHistory.length - 1];
+  if (comparator === "momentum") {
+    const previous = priceHistory[priceHistory.length - 2];
+    if (current * BPS > previous * 10_050n) {
+      return buildIntentDecision(
+        account,
+        adapter,
+        { action: "buy", amountMntWei: baselineBuyWei, rationale: "Momentum comparator bought positive continuation." },
+        nowSeconds,
+      );
+    }
+    if (current * BPS < previous * 9_950n && account.state.tokenBalanceWei > 0n) {
+      return buildIntentDecision(
+        account,
+        adapter,
+        {
+          action: "sell",
+          amountTokenWei: account.state.tokenBalanceWei / 5n,
+          rationale: "Momentum comparator reduced exposure on negative continuation.",
+        },
+        nowSeconds,
+      );
+    }
+    return { kind: "hold", rationale: "Momentum comparator found no continuation signal." };
+  }
+
+  const priorAverage = average(priceHistory.slice(0, -1));
+  if (current * 100n < priorAverage * 99n) {
+    return buildIntentDecision(
+      account,
+      adapter,
+      { action: "buy", amountMntWei: baselineBuyWei, rationale: "Mean-reversion comparator bought below average." },
+      nowSeconds,
+    );
+  }
+  if (current * 100n > priorAverage * 101n && account.state.tokenBalanceWei > 0n) {
+    return buildIntentDecision(
+      account,
+      adapter,
+      {
+        action: "sell",
+        amountTokenWei: (account.state.tokenBalanceWei * 4n) / 10n,
+        rationale: "Mean-reversion comparator sold above average.",
+      },
+      nowSeconds,
+    );
+  }
+  return { kind: "hold", rationale: "Mean-reversion comparator found no range deviation." };
+}
+
+function finalizeRunner(
+  runner: "ai" | BenchmarkComparator,
+  account: MutableAccount,
+  finalPriceWei: bigint,
+): BenchmarkRunnerResult {
   const netPortfolioValueWei = portfolioValueWei(account.state.balanceWei, account.state.tokenBalanceWei, finalPriceWei);
   const grossPortfolioValueWei = netPortfolioValueWei + account.costsPaidWei;
   const grossRoi = roiBps(grossPortfolioValueWei, account.initialPortfolioWei);
@@ -434,7 +521,9 @@ async function runRegime(
   let currentPrice = regime.pricesWei[0];
   const adapter = createMockDexAdapter(DEX, async () => currentPrice);
   const ai = createAccount(fixture, currentPrice);
-  const baseline = createAccount(fixture, currentPrice);
+  const comparatorAccounts = Object.fromEntries(
+    COMPARATOR_NAMES.map((name) => [name, createAccount(fixture, currentPrice)]),
+  ) as Record<BenchmarkComparator, MutableAccount>;
   const priceHistory: bigint[] = [];
 
   for (let tick = 0; tick < regime.pricesWei.length; tick += 1) {
@@ -442,7 +531,7 @@ async function runRegime(
     priceHistory.push(currentPrice);
     if (priceHistory.length > MAX_HISTORY) priceHistory.shift();
     ai.state.priceWei = currentPrice;
-    baseline.state.priceWei = currentPrice;
+    for (const account of Object.values(comparatorAccounts)) account.state.priceWei = currentPrice;
     const nowSeconds = 1_000n + BigInt(tick);
 
     let aiDecision: Decision;
@@ -466,21 +555,27 @@ async function runRegime(
     }
     markAccount(ai, tick, currentPrice, aiDecision, aiSettlement);
 
-    const baselineDecision = await buildBaselineDecision(baseline, adapter, fixture.baselineBuyWei, nowSeconds);
-    const baselineSettlement = settleDecision(
-      baseline,
-      baselineDecision,
-      adapter,
-      currentPrice,
-      fixture.costs,
-      nowSeconds,
-    );
-    markAccount(baseline, tick, currentPrice, baselineDecision, baselineSettlement);
+    for (const comparator of COMPARATOR_NAMES) {
+      const account = comparatorAccounts[comparator];
+      const decision = await buildComparatorDecision(
+        comparator,
+        account,
+        adapter,
+        fixture.baselineBuyWei,
+        priceHistory,
+        nowSeconds,
+      );
+      const settlement = settleDecision(account, decision, adapter, currentPrice, fixture.costs, nowSeconds);
+      markAccount(account, tick, currentPrice, decision, settlement);
+    }
   }
 
   const finalPriceWei = regime.pricesWei[regime.pricesWei.length - 1];
   const aiResult = finalizeRunner("ai", ai, finalPriceWei);
-  const baselineResult = finalizeRunner("baseline", baseline, finalPriceWei);
+  const comparators = Object.fromEntries(
+    COMPARATOR_NAMES.map((name) => [name, finalizeRunner(name, comparatorAccounts[name], finalPriceWei)]),
+  ) as Record<BenchmarkComparator, BenchmarkRunnerResult>;
+  const baselineResult = comparators.dca;
   const aiRoi = BigInt(aiResult.netRoiBps);
   const baselineRoi = BigInt(baselineResult.netRoiBps);
   return {
@@ -493,6 +588,7 @@ async function runRegime(
     aiEdgeBps: (aiRoi - baselineRoi).toString(),
     ai: aiResult,
     baseline: baselineResult,
+    comparators,
   };
 }
 
@@ -507,30 +603,76 @@ function minimum(values: bigint[]): bigint {
 
 export function createOfflineBenchmarkDecisionRunner(): BenchmarkDecisionRunner {
   return async ({ state, priceHistory, adapter }) => {
-    if (priceHistory.length < 2) return { kind: "hold", rationale: "Need at least two observed prices." };
+    const features = computeMarketFeatures(priceHistory);
+    if (features.regime === "uncertain") {
+      return {
+        kind: "hold",
+        rationale: "Regime-aware benchmark held because the observed history is still uncertain.",
+        analysis: {
+          regime: features.regime,
+          confidence: features.confidence,
+          expectedEdgeBps: 0,
+          sizePercent: 0,
+          invalidationCondition: "More observations establish a stable regime.",
+          marketFeatures: features,
+        },
+      };
+    }
     const current = priceHistory[priceHistory.length - 1];
     const prior = priceHistory.slice(0, -1);
     const recentAverage = average(prior);
     let intent: TradeIntent | { action: "hold"; rationale: string };
-    if (current * 100n < recentAverage * 99n) {
+    if (features.regime === "trend_up" && features.latestReturnBps > 0) {
+      intent = {
+        action: "buy",
+        amountMntWei: 25n * 10n ** 15n,
+        rationale: "Regime-aware benchmark added modestly during a confirmed uptrend.",
+      };
+    } else if (features.regime === "trend_down") {
+      intent =
+        state.tokenBalanceWei > 0n
+          ? {
+              action: "sell",
+              amountTokenWei: (state.tokenBalanceWei * 3n) / 10n,
+              rationale: "Regime-aware benchmark reduced exposure during a confirmed downtrend.",
+            }
+          : { action: "hold", rationale: "Regime-aware benchmark preserved cash during a confirmed downtrend." };
+    } else if (features.regime === "shock") {
+      intent =
+        features.latestReturnBps > 0 && features.drawdownFromPeakBps < -500
+          ? {
+              action: "buy",
+              amountMntWei: 2n * 10n ** 16n,
+              rationale: "Regime-aware benchmark used a small recovery entry after a shock.",
+            }
+          : { action: "hold", rationale: "Regime-aware benchmark waited for stabilization after a shock." };
+    } else if (current * 100n < recentAverage * 99n) {
       intent = {
         action: "buy",
         amountMntWei: 3n * 10n ** 16n,
-        rationale: "Deterministic benchmark strategy bought below the observed average.",
+        rationale: "Regime-aware benchmark bought below the observed range average.",
       };
     } else if (current * 100n > recentAverage * 101n && state.tokenBalanceWei > 0n) {
       intent = {
         action: "sell",
         amountTokenWei: (state.tokenBalanceWei * 4n) / 10n,
-        rationale: "Deterministic benchmark strategy sold above the observed average.",
+        rationale: "Regime-aware benchmark sold above the observed range average.",
       };
     } else {
-      intent = { action: "hold", rationale: "Price remained near the observed average." };
+      intent = { action: "hold", rationale: "Regime-aware benchmark found no cost-worthy range signal." };
     }
     const normalized = normalizeTradeIntent(intent, state, 1_000n);
-    if (normalized.action === "hold") return { kind: "hold", rationale: normalized.rationale };
+    const analysis = {
+      regime: features.regime,
+      confidence: features.confidence,
+      expectedEdgeBps: Math.max(0, Math.abs(features.shortSlopeBps)),
+      sizePercent: normalized.action === "hold" ? 0 : normalized.action === "buy" ? 25 : 40,
+      invalidationCondition: "The deterministic regime classification changes.",
+      marketFeatures: features,
+    };
+    if (normalized.action === "hold") return { kind: "hold", rationale: normalized.rationale, analysis };
     const quote = await adapter.quote(normalized);
-    return planToDecision(adapter.buildPlan(normalized, quote), normalized.rationale);
+    return { ...planToDecision(adapter.buildPlan(normalized, quote), normalized.rationale), analysis };
   };
 }
 
@@ -560,7 +702,12 @@ export function createOpenAiBenchmarkDecisionRunner(): BenchmarkDecisionRunner {
           `This is an offline, no-chain-write benchmark. Use only observed prices. Each execution pays ${
             costs.swapFeeBps + costs.slippageBps
           } bps in fee/slippage plus ${formatEther(costs.gasWei)} MNT gas, so avoid low-conviction turnover.`,
-          { openAiModel: model },
+          {
+            openAiModel: model,
+            estimatedExecutionCostBps:
+              Number(costs.swapFeeBps + costs.slippageBps) +
+              Number((costs.gasWei * BPS) / (3n * 10n ** 16n)),
+          },
         );
         console.error(`[multi-regime] ${regimeId} tick ${tickIndex + 1}: ${decision.kind}`);
         return decision;
@@ -644,6 +791,20 @@ export async function runMultiRegimeBenchmark(
         .reduce((total, regime) => total + BigInt(regime.baseline.totalCostsWei), 0n)
         .toString(),
       modelErrors,
+      comparatorAverageNetRoiBps: Object.fromEntries(
+        COMPARATOR_NAMES.map((comparator) => [
+          comparator,
+          average(regimes.map((regime) => BigInt(regime.comparators[comparator].netRoiBps))).toString(),
+        ]),
+      ) as Record<BenchmarkComparator, string>,
+      aiWinsByComparator: Object.fromEntries(
+        COMPARATOR_NAMES.map((comparator) => [
+          comparator,
+          regimes.filter(
+            (regime) => BigInt(regime.ai.netRoiBps) > BigInt(regime.comparators[comparator].netRoiBps),
+          ).length,
+        ]),
+      ) as Record<BenchmarkComparator, number>,
     },
     regimes,
   };
@@ -660,7 +821,8 @@ export async function writeMultiRegimeBenchmark(
 export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const offline = args.includes("--offline");
-  const positional = args.filter((arg) => arg !== "--offline");
+  const summaryOnly = args.includes("--summary");
+  const positional = args.filter((arg) => arg !== "--offline" && arg !== "--summary");
   const fixturePath = positional[0] ?? defaultFixturePath();
   const outputPath = positional[1] ?? defaultOutputPath();
   const fixture = await loadMultiRegimeFixture(fixturePath);
@@ -670,7 +832,7 @@ export async function main(): Promise<void> {
     { fixturePath, liveModel: !offline },
   );
   await writeMultiRegimeBenchmark(report, outputPath);
-  console.log(JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(summaryOnly ? { ...report.aggregate, model: report.model, fixture: report.fixture } : report, null, 2));
   if (!report.ok) process.exitCode = 1;
 }
 

@@ -22,7 +22,8 @@
     "eval:scenarios": "tsx src/scenarioEval.ts",
     "eval:openai-replay": "tsx src/openAiReplayEval.ts",
     "eval:multi-regime": "tsx src/multiRegimeEval.ts",
-    "eval:multi-regime:offline": "tsx src/multiRegimeEval.ts --offline"
+    "eval:multi-regime:offline": "tsx src/multiRegimeEval.ts --offline",
+    "eval:generate-heldout": "tsx src/heldOutMarketFixtures.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

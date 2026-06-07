@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-139%2F139-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-148%2F148-brightgreen)
 ![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -61,6 +61,20 @@ The June 7 cost-aware benchmark ran the real OpenAI decision path with `gpt-5-mi
 | Model errors | 0 | 0 |
 
 This benchmark intentionally exposes a strategy weakness rather than claiming universal outperformance. The current mean-reversion prompt performs well in choppy and shock-recovery paths, but sells too early in persistent rallies and keeps buying through persistent selloffs. The next strategy improvement should add trend/regime awareness and be accepted only if it improves held-out scenarios without weakening safety.
+
+### Regime-Aware Agent Upgrade
+
+The next AI slice is now implemented:
+
+- Deterministic no-lookahead features classify trend, range, shock, momentum, volatility, drawdown, and directional streaks.
+- OpenAI/Anthropic tool output now includes regime, confidence, expected edge, size percentage, and an invalidation condition.
+- Deterministic policy changes low-confidence or cost-negative proposals to `HOLD`.
+- Confirmed downtrends cap dip-buy sizing; confirmed uptrends cap premature selling.
+- Benchmark timelines preserve the structured model analysis for replay and grading.
+- Seeded development and held-out generators create 20 tuning paths and 100 untouched test paths.
+- DCA, momentum, mean-reversion, and always-hold comparators run alongside the AI path.
+
+A three-request live `gpt-5-mini` smoke passed with zero model errors and preserved capital through a short selloff (`0 bps` versus DCA at `-55 bps`). This is a contract/policy smoke, not a general performance claim. The API-free regime policy averaged `+15 bps` over the 100 generated held-out paths versus DCA at `-48 bps`, mean reversion at `-24 bps`, momentum at `+17 bps`, and hold at `0 bps`. Momentum remains the strongest comparator on average, so broader live-model evaluation is still required.
 
 ---
 
@@ -219,7 +233,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 139 passing |
+| Agent | `cd agent && npm test` | 148 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -239,6 +253,7 @@ OWNER_PRIVATE_KEY=0x...
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-proj-...
 OPENAI_MODEL=gpt-5.2
+AGENT_ESTIMATED_EXECUTION_COST_BPS=60
 # Optional if AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-6
@@ -434,6 +449,19 @@ cd agent
 npm run eval:multi-regime:offline -- evals/market-regimes.json traces/multi-regime-benchmark-offline.json
 ```
 
+Generate deterministic development and held-out market splits:
+
+```bash
+cd agent
+npm run eval:generate-heldout -- --seed=20260607 --dev=20 --test=100 --ticks=14 evals/generated
+npm run eval:multi-regime:offline -- \
+  evals/generated/market-paths-held-out.json \
+  traces/heldout-test.json \
+  --summary
+```
+
+Generated fixtures and trace artifacts are gitignored. The seed and command are the reproducibility contract. The benchmark report still records full tick-level timelines, while `--summary` limits terminal output to aggregate metrics.
+
 The dashboard reads these summary artifacts when present:
 
 ```bash
@@ -576,11 +604,14 @@ Completed for the hackathon submission:
 - Read-only Lendle/INIT-style health-factor, cap, utilization, and liquidation-buffer readiness
 - Structured JSONL decision traces, deterministic scenario evals, and model-backed OpenAI replay judging
 - Transaction-cost-aware live OpenAI benchmarks across four deterministic market regimes
+- Regime-aware structured decisions with deterministic confidence, cost, trend-sizing, and replay policies
+- Seeded 20-path development and 100-path held-out packs with DCA, momentum, mean-reversion, and hold comparators
 - Human-vs-AI event dashboard with PnL, decisions, simulations, protocol gates, and deploy-safe evidence
 
 Post-hackathon:
 
-- Longer historical and randomized regime packs beyond the current four-scenario benchmark
+- Historical MNT windows and a larger live-model run over the generated held-out pack
+- Prompt/model comparisons against the momentum comparator without tuning on held-out results
 - Additional real DEX routes and lending protocol fork fixtures
 - Multi-agent leaderboard from event logs
 - ERC-4337 session keys after the protocol/risk stack is stable

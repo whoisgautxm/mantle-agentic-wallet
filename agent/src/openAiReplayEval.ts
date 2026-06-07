@@ -29,6 +29,12 @@ export interface ReplayTickSummary {
   blockedReason: string;
   txHash: string;
   rationale: string;
+  modelRegime: string;
+  featureRegime: string;
+  decisionConfidence: string;
+  expectedEdgeBps: string;
+  sizePercent: string;
+  invalidationCondition: string;
   mntBalanceWei: string;
   tokenBalanceWei: string;
   priceWei: string;
@@ -264,6 +270,14 @@ function oracleRecord(tick: TickContext): Record<string, unknown> | undefined {
 
 function tickSummary(tick: TickContext): ReplayTickSummary {
   const decision = decisionRecord(tick);
+  const analysis =
+    decision?.analysis && typeof decision.analysis === "object"
+      ? (decision.analysis as Record<string, unknown>)
+      : undefined;
+  const marketFeatures =
+    analysis?.marketFeatures && typeof analysis.marketFeatures === "object"
+      ? (analysis.marketFeatures as Record<string, unknown>)
+      : undefined;
   const plan = planRecord(tick);
   const oracle = oracleRecord(tick);
   const outcome = text(tick.finalAction?.outcome, "pending");
@@ -306,6 +320,12 @@ function tickSummary(tick: TickContext): ReplayTickSummary {
     blockedReason: text(tick.finalAction?.reason, simulationOk === false ? nestedText(tick.simulation, "simulation", "reason") : "none"),
     txHash: text(tick.finalAction?.txHash, "not-submitted"),
     rationale: text(decision?.rationale ?? plan?.summary),
+    modelRegime: text(analysis?.regime),
+    featureRegime: text(marketFeatures?.regime),
+    decisionConfidence: text(analysis?.confidence),
+    expectedEdgeBps: text(analysis?.expectedEdgeBps),
+    sizePercent: text(analysis?.sizePercent),
+    invalidationCondition: text(analysis?.invalidationCondition),
     mntBalanceWei: text(portfolio?.mntBalanceWei),
     tokenBalanceWei: text(portfolio?.tokenBalanceWei),
     priceWei: text(portfolio?.priceWei),

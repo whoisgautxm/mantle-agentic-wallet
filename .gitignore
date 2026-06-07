@@ -8,6 +8,7 @@ node_modules/
 dist/
 traces/
 agent/traces/
+agent/evals/generated/
 .runtime/
 # foundry
 contracts/out/

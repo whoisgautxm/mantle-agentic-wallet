@@ -32,6 +32,7 @@ const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
+const ESTIMATED_EXECUTION_COST_BPS = Number(process.env.AGENT_ESTIMATED_EXECUTION_COST_BPS ?? "60");
 const priceHistory: bigint[] = [];
 const trace = createJsonlTraceWriter();
 let peakValueWei = 0n;
@@ -142,7 +143,11 @@ async function tick(context: string): Promise<void> {
     },
   };
 
-  const decision = await decide(client, state, priceHistory, tracedProtocol, context);
+  const decision = await decide(client, state, priceHistory, tracedProtocol, context, {
+    estimatedExecutionCostBps: Number.isFinite(ESTIMATED_EXECUTION_COST_BPS)
+      ? ESTIMATED_EXECUTION_COST_BPS
+      : 60,
+  });
   console.log("[decision]", decision.kind, "-", decision.rationale);
   await recordTrace("agent.decision", {
     tickId,

@@ -4,6 +4,7 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { planToDecision } from "./protocols/types.js";
 import {
+  createOfflineBenchmarkDecisionRunner,
   loadMultiRegimeFixture,
   rateLimitDelayMs,
   runMultiRegimeBenchmark,
@@ -49,6 +50,8 @@ describe("multi-regime benchmark", () => {
     expect(BigInt(ai.totalCostsWei)).toBeGreaterThan(0n);
     expect(BigInt(ai.netRoiBps)).toBeLessThan(BigInt(ai.grossRoiBps));
     expect(report.aggregate.modelErrors).toBe(0);
+    expect(report.regimes[0].comparators.dca.runner).toBe("dca");
+    expect(report.regimes[0].comparators.momentum.ticks).toBe(3);
   });
 
   it("records risk-blocked oversized actions instead of settling them", async () => {
@@ -76,7 +79,7 @@ describe("multi-regime benchmark", () => {
     const tracked = await loadMultiRegimeFixture(path.join("evals", "market-regimes.json"));
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "multi-regime-eval-"));
     const outputPath = path.join(outputDir, "latest.json");
-    const report = await runMultiRegimeBenchmark(tracked, async () => ({ kind: "hold", rationale: "test hold" }));
+    const report = await runMultiRegimeBenchmark(tracked, createOfflineBenchmarkDecisionRunner());
 
     await writeMultiRegimeBenchmark(report, outputPath);
     const written = JSON.parse(await readFile(outputPath, "utf8"));
@@ -84,6 +87,7 @@ describe("multi-regime benchmark", () => {
     expect(tracked.regimes).toHaveLength(4);
     expect(written.aggregate.regimes).toBe(4);
     expect(written.regimes[0].ai.timeline.length).toBeGreaterThan(0);
+    expect(written.regimes[0].ai.timeline.some((tick: any) => tick.analysis?.marketFeatures)).toBe(true);
   });
 
   it("honors API retry hints when rate limited", () => {

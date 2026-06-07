@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildDecisionFromToolUse, normalizeTradeIntent, parseToolUseIntent } from "./brain.js";
+import { computeMarketFeatures } from "./marketFeatures.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import type { VaultState } from "./types.js";
 
@@ -97,5 +98,88 @@ describe("tool-use parsing", () => {
 
     expect(normalized.action).toBe("buy");
     if (normalized.action === "buy") expect(normalized.amountMntWei).toBe(5n * 10n ** 16n);
+  });
+
+  it("changes low-confidence model trades to holds before quoting", async () => {
+    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const decision = await buildDecisionFromToolUse(
+      {
+        regime: "range",
+        confidence: 40,
+        action: "buy",
+        sizePercent: 30,
+        amountMnt: "0.03",
+        amountToken: "0",
+        expectedEdgeBps: 200,
+        invalidationCondition: "range breaks",
+        rationale: "buy the range low",
+      },
+      adapter,
+      state,
+      { estimatedExecutionCostBps: 50 },
+      computeMarketFeatures([2n * 10n ** 18n, 19n * 10n ** 17n, 2n * 10n ** 18n, 19n * 10n ** 17n]),
+    );
+
+    expect(decision.kind).toBe("hold");
+    expect(decision.rationale).toContain("confidence 40 is below 55");
+    expect(decision.analysis?.expectedEdgeBps).toBe(200);
+  });
+
+  it("requires expected edge to exceed estimated execution costs", async () => {
+    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const decision = await buildDecisionFromToolUse(
+      {
+        regime: "range",
+        confidence: 80,
+        action: "buy",
+        sizePercent: 30,
+        amountMnt: "0.03",
+        amountToken: "0",
+        expectedEdgeBps: 55,
+        invalidationCondition: "range breaks",
+        rationale: "small edge",
+      },
+      adapter,
+      state,
+      { estimatedExecutionCostBps: 50, edgeBufferBps: 10 },
+    );
+
+    expect(decision.kind).toBe("hold");
+    expect(decision.rationale).toContain("60 bps cost threshold");
+  });
+
+  it("caps dip buying to 15% of capacity during a deterministic downtrend", async () => {
+    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const features = computeMarketFeatures([
+      24n * 10n ** 17n,
+      22n * 10n ** 17n,
+      20n * 10n ** 17n,
+      18n * 10n ** 17n,
+    ]);
+    const decision = await buildDecisionFromToolUse(
+      {
+        regime: "trend_down",
+        confidence: 90,
+        action: "buy",
+        sizePercent: 80,
+        amountMnt: "0.08",
+        amountToken: "0",
+        expectedEdgeBps: 300,
+        invalidationCondition: "new low",
+        rationale: "attempt dip buy",
+      },
+      adapter,
+      state,
+      { estimatedExecutionCostBps: 50 },
+      features,
+    );
+
+    expect(features.regime).toBe("trend_down");
+    expect(decision.kind).toBe("execute");
+    if (decision.kind === "execute") {
+      expect(decision.valueWei).toBe(15n * 10n ** 15n);
+      expect(decision.rationale).toContain("15% of available capacity");
+      expect(decision.analysis?.marketFeatures?.regime).toBe("trend_down");
+    }
   });
 });

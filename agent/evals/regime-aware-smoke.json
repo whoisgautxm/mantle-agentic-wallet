@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "Regime-aware OpenAI contract smoke",
+  "initialPortfolio": {
+    "mnt": "1",
+    "token": "0"
+  },
+  "baseline": {
+    "buyMnt": "0.02"
+  },
+  "costs": {
+    "swapFeeBps": 30,
+    "slippageBps": 20,
+    "gasMnt": "0.0002"
+  },
+  "vaultLimits": {
+    "spendPerTxMnt": "0.1",
+    "dailySpendMnt": "1"
+  },
+  "regimes": [
+    {
+      "id": "selloff-smoke",
+      "label": "Selloff policy smoke",
+      "description": "A short declining path verifies the structured regime output and downtrend exposure policy.",
+      "prices": ["2.00", "1.95", "1.88", "1.80"]
+    }
+  ]
+}
