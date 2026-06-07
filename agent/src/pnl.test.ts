@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
+import { gasAdjustedRoiBps, portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
 
 describe("portfolioValueWei", () => {
   it("adds MNT balance and token value", () => {
@@ -44,5 +44,22 @@ describe("portfolioSnapshot", () => {
     expect(snapshot.tokenValueWei).toBe(2n * 10n ** 17n);
     expect(snapshot.portfolioValueWei).toBe(1n * 10n ** 18n);
     expect(snapshot.roiBps).toBe(1111n);
+  });
+});
+
+describe("gasAdjustedRoiBps", () => {
+  it("subtracts realized gas before computing ROI", () => {
+    // vault-only: 1.000694 vs 1.0 start = +6 bps; after 0.0459 gas the net is approximately -452 bps.
+    const portfolio = 1_000_693_851_268_289_630n;
+    const gas = 45_907_541_814_900_000n;
+    const start = 10n ** 18n;
+    expect(roiBps(portfolio, start)).toBe(6n);
+    expect(gasAdjustedRoiBps(portfolio, gas, start)).toBe(-452n);
+  });
+
+  it("equals vault-only ROI when no gas was spent", () => {
+    const portfolio = 11n * 10n ** 17n;
+    const start = 10n ** 18n;
+    expect(gasAdjustedRoiBps(portfolio, 0n, start)).toBe(roiBps(portfolio, start));
   });
 });

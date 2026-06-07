@@ -39,7 +39,11 @@ describe("submitExecute", () => {
   it("runs simulation before writing when no precomputed result is supplied", async () => {
     const writeContract = vi.fn(async () => hash);
     const simulator = vi.fn(async () => ({ ok: true, gasEstimate: 30_000n, warnings: [] }));
-    const waitForTransactionReceipt = vi.fn(async () => ({ status: "success" as const }));
+    const waitForTransactionReceipt = vi.fn(async () => ({
+      status: "success" as const,
+      gasUsed: 100_000n,
+      effectiveGasPrice: 2n,
+    }));
     const client = { account: { address: account }, writeContract };
 
     const result = await submitExecute(vault, decision, client as any, {
@@ -47,7 +51,9 @@ describe("submitExecute", () => {
       waitForTransactionReceipt,
     });
 
-    expect(result).toBe(hash);
+    expect(result.hash).toBe(hash);
+    expect(result.gasUsedWei).toBe(100_000n);
+    expect(result.gasCostWei).toBe(200_000n);
     expect(simulator).toHaveBeenCalledWith(vault, decision, account, { client: undefined });
     expect(writeContract).toHaveBeenCalledOnce();
     expect(writeContract).toHaveBeenCalledWith(

@@ -9,6 +9,13 @@ export function roiBps(currentWei: bigint, referenceWei: bigint): bigint {
   return ((currentWei - referenceWei) * 10_000n) / referenceWei;
 }
 
+/// Gas is paid by the runner EOA, not the vault, so vault-only ROI omits it. This subtracts
+/// realized gas to reflect true on-chain economics (see live-run report section 6, where omitted
+/// gas turned a +6 bps baseline vault gain into approximately -452 bps net).
+export function gasAdjustedRoiBps(portfolioValueWei: bigint, gasSpentWei: bigint, referenceValueWei: bigint): bigint {
+  return roiBps(portfolioValueWei - gasSpentWei, referenceValueWei);
+}
+
 export interface PortfolioSnapshot {
   mntBalanceWei: bigint;
   tokenBalanceWei: bigint;

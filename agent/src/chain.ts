@@ -10,12 +10,37 @@ export { VAULT_ABI };
 type ExecuteDecision = Extract<Decision, { kind: "execute" }>;
 type AgentWalletClient = typeof walletClient;
 
+interface ExecuteReceipt {
+  status: "success" | "reverted";
+  gasUsed?: bigint;
+  effectiveGasPrice?: bigint;
+}
+
 export interface SubmitExecuteOptions {
   account?: `0x${string}`;
   simulation?: SimulationResult;
   simulator?: typeof simulateExecute;
   simulationClient?: ExecuteSimulationClient;
-  waitForTransactionReceipt?: (hash: `0x${string}`) => Promise<{ status: "success" | "reverted" }>;
+  waitForTransactionReceipt?: (hash: `0x${string}`) => Promise<ExecuteReceipt>;
+}
+
+export interface ExecuteResult {
+  hash: `0x${string}`;
+  gasUsedWei: bigint;
+  gasCostWei: bigint; // gasUsed * effectiveGasPrice, paid by the runner EOA (not the vault)
+}
+
+/// Error thrown when a guarded execute reverts on-chain; carries the hash + realized gas so the
+/// caller can record a complete `reverted` terminal trace event (see live-run report sections 6, 11).
+export class ExecuteRevertedError extends Error {
+  constructor(
+    readonly hash: `0x${string}`,
+    readonly gasUsedWei: bigint,
+    readonly gasCostWei: bigint,
+  ) {
+    super(`execute tx reverted on-chain: ${hash}`);
+    this.name = "ExecuteRevertedError";
+  }
 }
 
 const READ_RETRY_DELAY_MS = 2500;
@@ -109,7 +134,7 @@ export async function submitExecute(
   d: ExecuteDecision,
   client: AgentWalletClient = walletClient,
   options: SubmitExecuteOptions = {},
-): Promise<`0x${string}`> {
+): Promise<ExecuteResult> {
   const account = options.account ?? ((client as any).account?.address as `0x${string}` | undefined);
   const preflight =
     options.simulation ??
@@ -129,10 +154,12 @@ export async function submitExecute(
   const waitForTransactionReceipt =
     options.waitForTransactionReceipt ?? ((txHash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash: txHash }));
   const receipt = await waitForTransactionReceipt(hash);
+  const gasUsedWei = receipt.gasUsed ?? 0n;
+  const gasCostWei = gasUsedWei * (receipt.effectiveGasPrice ?? 0n);
   if (receipt.status !== "success") {
-    throw new Error(`execute tx reverted on-chain: ${hash}`);
+    throw new ExecuteRevertedError(hash, gasUsedWei, gasCostWei);
   }
-  return hash;
+  return { hash, gasUsedWei, gasCostWei };
 }
 
 function failMissingSimulationAccount(): never {

@@ -6,7 +6,7 @@ import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./cha
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { chain, aiVaultAddress, dexAddress, agentAccount, mockTokenAddress } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
-import { portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
+import { gasAdjustedRoiBps, portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
 import { evaluateRisk } from "./risk/engine.js";
@@ -45,6 +45,7 @@ const priceHistory: bigint[] = [];
 const trace = createJsonlTraceWriter();
 let peakValueWei = 0n;
 let benchmarkStartValueWei = 0n;
+let cumulativeGasWei = 0n;
 let breakerTripped = false;
 
 async function recordTrace(type: string, payload: Record<string, unknown>): Promise<void> {
@@ -235,9 +236,10 @@ async function tick(context: string): Promise<void> {
     return;
   }
 
-  const hash = await submitExecute(aiVaultAddress, decision, undefined, { simulation });
+  const { hash, gasUsedWei, gasCostWei } = await submitExecute(aiVaultAddress, decision, undefined, { simulation });
+  cumulativeGasWei += gasCostWei;
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
-  console.log("[executed]", `${base}/tx/${hash}`);
+  console.log("[executed]", `${base}/tx/${hash}`, `gas=${gasCostWei.toString()}`);
   await sendAlert(decision, hash);
   const stateAfter = await readVaultState(aiVaultAddress);
   const portfolioAfter = portfolioSnapshot(stateAfter, benchmarkStartValueWei);
@@ -250,6 +252,16 @@ async function tick(context: string): Promise<void> {
     executionPolicy: { ...executionPolicy, onchainTargetAllowed },
     portfolioBefore: portfolio,
     portfolioAfter,
+    gas: {
+      gasUsedWei: gasUsedWei.toString(),
+      gasCostWei: gasCostWei.toString(),
+      cumulativeGasWei: cumulativeGasWei.toString(),
+      gasAdjustedRoiBps: gasAdjustedRoiBps(
+        portfolioAfter.portfolioValueWei,
+        cumulativeGasWei,
+        benchmarkStartValueWei,
+      ).toString(),
+    },
   });
 }
 
