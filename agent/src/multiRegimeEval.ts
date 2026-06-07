@@ -12,6 +12,11 @@ import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protoc
 import { evaluateRisk } from "./risk/engine.js";
 import { DEFAULT_RISK_LIMITS } from "./risk/limits.js";
 import type { RiskResult } from "./risk/types.js";
+import {
+  regimeRoutedEnsemble,
+  type StrategyFunction,
+  type StrategyIntent,
+} from "./strategies/ensemble.js";
 import type { Decision, DecisionAnalysis, VaultState } from "./types.js";
 
 const DEX = "0x1111111111111111111111111111111111111111" as const;
@@ -76,6 +81,7 @@ export interface BenchmarkDecisionInput {
   priceHistory: bigint[];
   adapter: ProtocolAdapter;
   costs: BenchmarkCosts;
+  baselineBuyWei: bigint;
 }
 
 export type BenchmarkDecisionRunner = (input: BenchmarkDecisionInput) => Promise<Decision>;
@@ -204,7 +210,7 @@ function defaultOutputPath(): string {
 function modelName(liveModel: boolean): string {
   return liveModel
     ? process.env.OPENAI_BENCHMARK_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.2"
-    : "deterministic-offline";
+    : "regime-routed-ensemble";
 }
 
 function parseBps(value: number, label: string): bigint {
@@ -545,6 +551,7 @@ async function runRegime(
         priceHistory: [...priceHistory],
         adapter,
         costs: fixture.costs,
+        baselineBuyWei: fixture.baselineBuyWei,
       });
       aiSettlement = settleDecision(ai, aiDecision, adapter, currentPrice, fixture.costs, nowSeconds);
     } catch (error) {
@@ -602,73 +609,51 @@ function minimum(values: bigint[]): bigint {
   return values.reduce((lowest, value) => (value < lowest ? value : lowest));
 }
 
-export function createOfflineBenchmarkDecisionRunner(): BenchmarkDecisionRunner {
-  return async ({ state, priceHistory, adapter }) => {
+function strategyTradeIntent(intent: StrategyIntent): TradeIntent | { action: "hold"; rationale: string } {
+  if (intent.action === "hold") return { action: "hold", rationale: intent.rationale };
+  if (intent.action === "buy") {
+    return {
+      action: "buy",
+      amountMntWei: intent.amountMntWei,
+      rationale: intent.rationale,
+    };
+  }
+  return {
+    action: "sell",
+    amountTokenWei: intent.amountTokenWei,
+    rationale: intent.rationale,
+  };
+}
+
+function estimatedCostBps(costs: BenchmarkCosts, baselineBuyWei: bigint): number {
+  const feeAndSlippage = costs.swapFeeBps + costs.slippageBps;
+  const gasBps = baselineBuyWei > 0n ? (costs.gasWei * BPS) / baselineBuyWei : 0n;
+  return Number(feeAndSlippage + gasBps);
+}
+
+export function createOfflineBenchmarkDecisionRunner(
+  strategy: StrategyFunction = regimeRoutedEnsemble,
+): BenchmarkDecisionRunner {
+  return async ({ tickIndex, state, priceHistory, adapter, costs, baselineBuyWei }) => {
     const features = computeMarketFeatures(priceHistory);
-    if (features.regime === "uncertain") {
-      return {
-        kind: "hold",
-        rationale: "Regime-aware benchmark held because the observed history is still uncertain.",
-        analysis: {
-          regime: features.regime,
-          confidence: features.confidence,
-          expectedEdgeBps: 0,
-          sizePercent: 0,
-          invalidationCondition: "More observations establish a stable regime.",
-          marketFeatures: features,
-        },
-      };
-    }
-    const current = priceHistory[priceHistory.length - 1];
-    const prior = priceHistory.slice(0, -1);
-    const recentAverage = average(prior);
-    let intent: TradeIntent | { action: "hold"; rationale: string };
-    if (features.regime === "trend_up" && features.latestReturnBps > 0) {
-      intent = {
-        action: "buy",
-        amountMntWei: 25n * 10n ** 15n,
-        rationale: "Regime-aware benchmark added modestly during a confirmed uptrend.",
-      };
-    } else if (features.regime === "trend_down") {
-      intent =
-        state.tokenBalanceWei > 0n
-          ? {
-              action: "sell",
-              amountTokenWei: (state.tokenBalanceWei * 3n) / 10n,
-              rationale: "Regime-aware benchmark reduced exposure during a confirmed downtrend.",
-            }
-          : { action: "hold", rationale: "Regime-aware benchmark preserved cash during a confirmed downtrend." };
-    } else if (features.regime === "shock") {
-      intent =
-        features.latestReturnBps > 0 && features.drawdownFromPeakBps < -500
-          ? {
-              action: "buy",
-              amountMntWei: 2n * 10n ** 16n,
-              rationale: "Regime-aware benchmark used a small recovery entry after a shock.",
-            }
-          : { action: "hold", rationale: "Regime-aware benchmark waited for stabilization after a shock." };
-    } else if (current * 100n < recentAverage * 99n) {
-      intent = {
-        action: "buy",
-        amountMntWei: 3n * 10n ** 16n,
-        rationale: "Regime-aware benchmark bought below the observed range average.",
-      };
-    } else if (current * 100n > recentAverage * 101n && state.tokenBalanceWei > 0n) {
-      intent = {
-        action: "sell",
-        amountTokenWei: (state.tokenBalanceWei * 4n) / 10n,
-        rationale: "Regime-aware benchmark sold above the observed range average.",
-      };
-    } else {
-      intent = { action: "hold", rationale: "Regime-aware benchmark found no cost-worthy range signal." };
-    }
-    const normalized = normalizeTradeIntent(intent, state, 1_000n);
+    const strategyIntent = strategy({
+      priceHistory,
+      features,
+      state,
+      baselineBuyWei,
+      estimatedExecutionCostBps: estimatedCostBps(costs, baselineBuyWei),
+    });
+    const normalized = normalizeTradeIntent(
+      strategyTradeIntent(strategyIntent),
+      state,
+      1_000n + BigInt(tickIndex),
+    );
     const analysis = {
       regime: features.regime,
       confidence: features.confidence,
-      expectedEdgeBps: Math.max(0, Math.abs(features.shortSlopeBps)),
-      sizePercent: normalized.action === "hold" ? 0 : normalized.action === "buy" ? 25 : 40,
-      invalidationCondition: "The deterministic regime classification changes.",
+      expectedEdgeBps: strategyIntent.expectedEdgeBps,
+      sizePercent: normalized.action === "hold" ? 0 : strategyIntent.sizePercent,
+      invalidationCondition: "The deterministic regime classification or cost-adjusted edge changes.",
       marketFeatures: features,
     };
     if (normalized.action === "hold") return { kind: "hold", rationale: normalized.rationale, analysis };

@@ -88,6 +88,25 @@ describe("multi-regime benchmark", () => {
     expect(written.aggregate.regimes).toBe(4);
     expect(written.regimes[0].ai.timeline.length).toBeGreaterThan(0);
     expect(written.regimes[0].ai.timeline.some((tick: any) => tick.analysis?.marketFeatures)).toBe(true);
+    expect(written.regimes[0].ai.timeline.some((tick: any) => tick.rationale.includes("Ensemble"))).toBe(true);
+  });
+
+  it("delegates the offline path to the injected strategy without future prices", async () => {
+    const observedLengths: number[] = [];
+    const runner = createOfflineBenchmarkDecisionRunner(({ priceHistory }) => {
+      observedLengths.push(priceHistory.length);
+      return {
+        action: "hold",
+        sizePercent: 0,
+        expectedEdgeBps: 0,
+        rationale: "custom strategy hold",
+      };
+    });
+
+    const report = await runMultiRegimeBenchmark(fixture, runner);
+
+    expect(observedLengths).toEqual([1, 2, 3]);
+    expect(report.regimes[0].ai.timeline.every((tick) => tick.rationale === "custom strategy hold")).toBe(true);
   });
 
   it("honors API retry hints when rate limited", () => {

@@ -3,14 +3,19 @@ import OpenAI from "openai";
 import { formatEther, parseEther } from "viem";
 import { computeMarketFeatures, formatMarketFeatures, type MarketFeatures, type MarketRegime } from "./marketFeatures.js";
 import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protocols/types.js";
+import {
+  DEFAULT_EDGE_BUFFER_BPS,
+  DEFAULT_MIN_CONFIDENCE,
+  type StrategyFunction,
+  type StrategyIntent,
+} from "./strategies/ensemble.js";
 import type { Decision, DecisionAnalysis, VaultState } from "./types.js";
 
 const DAY_SECONDS = 24n * 60n * 60n;
 const MAX_SELL_POSITION_BPS = 6_000n;
-const DEFAULT_MIN_CONFIDENCE = 55;
-const DEFAULT_EDGE_BUFFER_BPS = 10;
 const DEFAULT_DOWNTREND_BUY_MAX_PERCENT = 15;
 const DEFAULT_UPTREND_SELL_MAX_PERCENT = 20;
+const DEFAULT_STRATEGY_BASELINE_BUY_WEI = 5n * 10n ** 15n;
 const REGIMES: MarketRegime[] = ["trend_up", "trend_down", "range", "shock", "uncertain"];
 
 export const PROPOSE_ACTION_TOOL = {
@@ -84,6 +89,8 @@ export interface DecisionOptions {
   edgeBufferBps?: number;
   downtrendBuyMaxPercent?: number;
   uptrendSellMaxPercent?: number;
+  strategyPrior?: StrategyFunction;
+  strategyBaselineBuyWei?: bigint;
 }
 
 type HoldIntent = { action: "hold"; rationale: string };
@@ -231,6 +238,82 @@ function policyHold(rationale: string, message: string): HoldIntent {
   return { action: "hold", rationale: normalizedRationale(rationale, message) };
 }
 
+function applyStrategyPrior(
+  proposal: ParsedToolProposal,
+  prior: StrategyIntent,
+): ParsedToolProposal {
+  if (proposal.action === "hold") return proposal;
+  if (prior.action === "hold") {
+    return {
+      action: "hold",
+      rationale: normalizedRationale(
+        proposal.rationale,
+        `ensemble prior changed trade to HOLD: ${prior.rationale}`,
+      ),
+      analysis: proposal.analysis,
+      policyComplete: proposal.policyComplete,
+    };
+  }
+  if (proposal.action !== prior.action) {
+    return {
+      action: "hold",
+      rationale: normalizedRationale(
+        proposal.rationale,
+        `ensemble prior rejected ${proposal.action} because it routed to ${prior.action}`,
+      ),
+      analysis: proposal.analysis,
+      policyComplete: proposal.policyComplete,
+    };
+  }
+
+  const analysis = {
+    ...proposal.analysis,
+    sizePercent: Math.min(proposal.analysis.sizePercent, prior.sizePercent),
+    expectedEdgeBps: Math.min(proposal.analysis.expectedEdgeBps, prior.expectedEdgeBps),
+  };
+  if (proposal.action === "buy") {
+    const amountMntWei = minBigint(proposal.amountMntWei ?? 0n, prior.amountMntWei ?? 0n);
+    if (amountMntWei <= 0n) {
+      return {
+        action: "hold",
+        rationale: normalizedRationale(proposal.rationale, "ensemble prior buy capacity is zero"),
+        analysis,
+        policyComplete: proposal.policyComplete,
+      };
+    }
+    return {
+      action: "buy",
+      amountMntWei,
+      rationale: normalizedRationale(
+        proposal.rationale,
+        `ensemble prior capped buy to ${formatEther(amountMntWei)} MNT`,
+      ),
+      analysis,
+      policyComplete: proposal.policyComplete,
+    };
+  }
+
+  const amountTokenWei = minBigint(proposal.amountTokenWei ?? 0n, prior.amountTokenWei ?? 0n);
+  if (amountTokenWei <= 0n) {
+    return {
+      action: "hold",
+      rationale: normalizedRationale(proposal.rationale, "ensemble prior sell capacity is zero"),
+      analysis,
+      policyComplete: proposal.policyComplete,
+    };
+  }
+  return {
+    action: "sell",
+    amountTokenWei,
+    rationale: normalizedRationale(
+      proposal.rationale,
+      `ensemble prior capped sell to ${formatEther(amountTokenWei)} tokens`,
+    ),
+    analysis,
+    policyComplete: proposal.policyComplete,
+  };
+}
+
 function applyDecisionPolicy(
   proposal: ParsedToolProposal,
   state: VaultState,
@@ -307,9 +390,20 @@ export async function buildDecisionFromToolUse(
   state?: VaultState,
   options: DecisionOptions = {},
   features: MarketFeatures = computeMarketFeatures(state ? [state.priceWei] : []),
+  priceHistory: readonly bigint[] = state ? [state.priceWei] : [],
 ): Promise<Decision> {
-  const proposal = parseToolUseIntent(input);
+  let proposal = parseToolUseIntent(input);
   proposal.analysis.marketFeatures = features;
+  if (state && options.strategyPrior) {
+    const prior = options.strategyPrior({
+      priceHistory,
+      features,
+      state,
+      baselineBuyWei: options.strategyBaselineBuyWei ?? DEFAULT_STRATEGY_BASELINE_BUY_WEI,
+      estimatedExecutionCostBps: options.estimatedExecutionCostBps,
+    });
+    proposal = applyStrategyPrior(proposal, prior);
+  }
   const nowSeconds = BigInt(Math.floor(Date.now() / 1_000));
   const policyIntent = state ? applyDecisionPolicy(proposal, state, features, options, nowSeconds) : proposal;
   const executableIntent = state ? normalizeTradeIntent(policyIntent, state, nowSeconds) : policyIntent;
@@ -377,7 +471,7 @@ async function decideWithAnthropic(
   if (!toolUse || toolUse.type !== "tool_use") {
     throw new Error("model did not call propose_action");
   }
-  return buildDecisionFromToolUse(toolUse.input, adapter, state, options, features);
+  return buildDecisionFromToolUse(toolUse.input, adapter, state, options, features, priceHistory);
 }
 
 async function decideWithOpenAI(
@@ -413,7 +507,7 @@ async function decideWithOpenAI(
   if (!toolCall) {
     throw new Error("model did not call propose_action");
   }
-  return buildDecisionFromToolUse(JSON.parse(toolCall.arguments ?? "{}"), adapter, state, options, features);
+  return buildDecisionFromToolUse(JSON.parse(toolCall.arguments ?? "{}"), adapter, state, options, features, priceHistory);
 }
 
 /// Calls the configured model provider and returns a parsed Decision.

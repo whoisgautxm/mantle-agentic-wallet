@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildDecisionFromToolUse, normalizeTradeIntent, parseToolUseIntent } from "./brain.js";
 import { computeMarketFeatures } from "./marketFeatures.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
+import type { StrategyFunction } from "./strategies/ensemble.js";
 import type { VaultState } from "./types.js";
 
 const DEX = "0x3333333333333333333333333333333333333333" as const;
@@ -185,6 +186,77 @@ describe("tool-use parsing", () => {
       expect(decision.valueWei).toBe(15n * 10n ** 15n);
       expect(decision.rationale).toContain("15% of available capacity");
       expect(decision.analysis?.marketFeatures?.regime).toBe("trend_down");
+    }
+  });
+
+  it("lets an ensemble prior veto a contradictory model trade", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const holdPrior: StrategyFunction = () => ({
+      action: "hold",
+      sizePercent: 0,
+      expectedEdgeBps: 0,
+      rationale: "ensemble veto",
+    });
+    const decision = await buildDecisionFromToolUse(
+      {
+        regime: "range",
+        confidence: 90,
+        action: "buy",
+        sizePercent: 80,
+        amountMnt: "0.08",
+        amountToken: "0",
+        expectedEdgeBps: 300,
+        invalidationCondition: "range breaks",
+        rationale: "model buy",
+      },
+      adapter,
+      state,
+      { estimatedExecutionCostBps: 50, strategyPrior: holdPrior, strategyBaselineBuyWei: 2n * 10n ** 16n },
+      computeMarketFeatures([2n * 10n ** 18n, 19n * 10n ** 17n, 2n * 10n ** 18n, 19n * 10n ** 17n]),
+      [2n * 10n ** 18n, 19n * 10n ** 17n, 2n * 10n ** 18n, 19n * 10n ** 17n],
+    );
+
+    expect(decision.kind).toBe("hold");
+    expect(decision.rationale).toContain("ensemble prior");
+  });
+
+  it("caps an aligned model trade to the ensemble prior size", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const buyPrior: StrategyFunction = () => ({
+      action: "buy",
+      amountMntWei: 3n * 10n ** 16n,
+      sizePercent: 30,
+      expectedEdgeBps: 200,
+      rationale: "ensemble trend cap",
+    });
+    const decision = await buildDecisionFromToolUse(
+      {
+        regime: "trend_up",
+        confidence: 90,
+        action: "buy",
+        sizePercent: 80,
+        amountMnt: "0.08",
+        amountToken: "0",
+        expectedEdgeBps: 300,
+        invalidationCondition: "trend breaks",
+        rationale: "model trend buy",
+      },
+      adapter,
+      state,
+      { estimatedExecutionCostBps: 50, strategyPrior: buyPrior, strategyBaselineBuyWei: 2n * 10n ** 16n },
+      computeMarketFeatures([
+        2n * 10n ** 18n,
+        21n * 10n ** 17n,
+        22n * 10n ** 17n,
+        23n * 10n ** 17n,
+      ]),
+      [2n * 10n ** 18n, 21n * 10n ** 17n, 22n * 10n ** 17n, 23n * 10n ** 17n],
+    );
+
+    expect(decision.kind).toBe("execute");
+    if (decision.kind === "execute") {
+      expect(decision.valueWei).toBe(3n * 10n ** 16n);
+      expect(decision.rationale).toContain("ensemble prior capped");
     }
   });
 });

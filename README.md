@@ -77,7 +77,13 @@ The next AI slice is now implemented:
 - Seeded development and held-out generators create 20 tuning paths and 100 untouched test paths.
 - DCA, momentum, mean-reversion, and always-hold comparators run alongside the AI path.
 
-A three-request live `gpt-5-mini` smoke passed with zero model errors and preserved capital through a short selloff (`0 bps` versus DCA at `-55 bps`). This is a contract/policy smoke, not a general performance claim. The API-free regime policy averaged `+15 bps` over the 100 generated held-out paths versus DCA at `-48 bps`, mean reversion at `-24 bps`, momentum at `+17 bps`, and hold at `0 bps`. Momentum remains the strongest comparator on average, so broader live-model evaluation is still required.
+A three-request live `gpt-5-mini` smoke passed with zero model errors and preserved capital through a short selloff (`0 bps` versus DCA at `-55 bps`). This is a contract/policy smoke, not a general performance claim. The original API-free regime policy averaged `+15 bps` over the first 100 held-out paths and trailed momentum at `+17 bps`.
+
+### Regime-Routed Ensemble
+
+The shared deterministic ensemble now follows momentum in confirmed trends, preserves capital in downtrends, uses cost-gated mean reversion in ranges, and stays conservative around shocks. On the untouched seed-`20260607` held-out set it averaged **+63 bps**, versus momentum at `+17`, DCA at `-48`, mean reversion at `-24`, and hold at `0`; it beat momentum on **58/100** paths and improved worst drawdown from `-31` to `-28 bps`.
+
+Fresh seed robustness runs also beat momentum on average: `+57` versus `+23 bps` for seed `20260608`, and `+66` versus `+25 bps` for seed `99999999`. Their path win rates were `44/100` and `49/100`, so the evidence supports stronger average performance, not universal path dominance. The offline evaluator uses the ensemble by default. Live model decisions remain model-led unless `AGENT_STRATEGY=ensemble` enables the deterministic veto/cap prior. Full methodology: [ensemble strategy report](docs/reports/2026-06-07-ensemble-strategy.md).
 
 ---
 
@@ -455,6 +461,8 @@ cd agent
 npm run eval:multi-regime:offline -- evals/market-regimes.json traces/multi-regime-benchmark-offline.json
 ```
 
+The offline AI path uses the shared regime-routed ensemble. Comparators remain unchanged. For the live agent, set `AGENT_STRATEGY=ensemble` to let the same deterministic router veto conflicting model trades or cap aligned sizing without replacing model reasoning.
+
 Generate deterministic development and held-out market splits:
 
 ```bash
@@ -614,12 +622,13 @@ Completed for the hackathon submission:
 - Transaction-cost-aware live OpenAI benchmarks across four deterministic market regimes
 - Regime-aware structured decisions with deterministic confidence, cost, trend-sizing, and replay policies
 - Seeded 20-path development and 100-path held-out packs with DCA, momentum, mean-reversion, and hold comparators
+- Regime-routed ensemble that clears the three-seed average-performance gate against momentum
 - Human-vs-AI event dashboard with PnL, decisions, simulations, protocol gates, and deploy-safe evidence
 
 Post-hackathon:
 
 - Historical MNT windows and a larger live-model run over the generated held-out pack
-- Prompt/model comparisons against the momentum comparator without tuning on held-out results
+- Larger live-model comparisons using the optional ensemble prior
 - Additional real DEX routes and lending protocol fork fixtures
 - Multi-agent leaderboard from event logs
 - ERC-4337 session keys after the protocol/risk stack is stable

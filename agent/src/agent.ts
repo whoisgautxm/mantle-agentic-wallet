@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { parseEther } from "viem";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { chain, aiVaultAddress, dexAddress, agentAccount, mockTokenAddress } from "./config.js";
@@ -11,6 +12,7 @@ import { createProtocolRegistry } from "./protocols/registry.js";
 import { evaluateRisk } from "./risk/engine.js";
 import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
+import { regimeRoutedEnsemble } from "./strategies/ensemble.js";
 import { sendAlert } from "./telegram.js";
 import { createJsonlTraceWriter } from "./tracing.js";
 
@@ -33,6 +35,12 @@ const riskLimits = loadRiskLimitsFromEnv();
 const PRICE_HISTORY_MAX = 12;
 const MAX_DRAWDOWN_BPS = -1500n;
 const ESTIMATED_EXECUTION_COST_BPS = Number(process.env.AGENT_ESTIMATED_EXECUTION_COST_BPS ?? "60");
+const AGENT_STRATEGY = (process.env.AGENT_STRATEGY ?? "model").toLowerCase();
+if (AGENT_STRATEGY !== "model" && AGENT_STRATEGY !== "ensemble") {
+  throw new Error("AGENT_STRATEGY must be model or ensemble");
+}
+const strategyPrior = AGENT_STRATEGY === "ensemble" ? regimeRoutedEnsemble : undefined;
+const strategyBaselineBuyWei = parseEther(process.env.AGENT_STRATEGY_BASELINE_MNT ?? "0.005");
 const priceHistory: bigint[] = [];
 const trace = createJsonlTraceWriter();
 let peakValueWei = 0n;
@@ -147,6 +155,8 @@ async function tick(context: string): Promise<void> {
     estimatedExecutionCostBps: Number.isFinite(ESTIMATED_EXECUTION_COST_BPS)
       ? ESTIMATED_EXECUTION_COST_BPS
       : 60,
+    strategyPrior,
+    strategyBaselineBuyWei,
   });
   console.log("[decision]", decision.kind, "-", decision.rationale);
   await recordTrace("agent.decision", {
