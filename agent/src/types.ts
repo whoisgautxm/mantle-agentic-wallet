@@ -34,6 +34,8 @@ export interface VaultState {
   paused: boolean;
   tokenBalanceWei: bigint;
   priceWei: bigint;
+  // Block the snapshot was pinned to; all fields above are read at this block (atomic observation).
+  blockNumber?: bigint;
 }
 
 export interface PolicyResult {

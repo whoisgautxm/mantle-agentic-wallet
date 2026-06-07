@@ -17,7 +17,8 @@ export interface ScenarioInput {
   name: string;
   description?: string;
   target?: `0x${string}`;
-  state: Record<keyof VaultState, string | boolean>;
+  // blockNumber is a runtime observation detail, not part of a risk scenario fixture.
+  state: Record<keyof Omit<VaultState, "blockNumber">, string | boolean>;
   decision:
     | { kind: "hold"; rationale?: string }
     | { kind: "buy"; valueWei: string; target?: `0x${string}`; rationale?: string }

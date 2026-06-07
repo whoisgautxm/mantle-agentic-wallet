@@ -83,7 +83,7 @@ async function retryRead<T>(label: string, read: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
-export async function readPrice(): Promise<bigint> {
+export async function readPrice(blockNumber?: bigint): Promise<bigint> {
   return retryRead(
     "price",
     async () =>
@@ -91,31 +91,40 @@ export async function readPrice(): Promise<bigint> {
         address: dexAddress,
         abi: DEX_ABI,
         functionName: "price",
+        ...(blockNumber !== undefined ? { blockNumber } : {}),
       })) as bigint,
   );
 }
 
-export async function readVaultState(vault: `0x${string}` = aiVaultAddress): Promise<VaultState> {
-  const balanceWei = await retryRead("vault balance", () => publicClient.getBalance({ address: vault }));
+/// Atomic observation: every field is read at a single pinned block so price history, balances,
+/// limits, token inventory, and DEX price can never come from different blocks (see live-run
+/// report section 9: the 369 bps split-snapshot bug). Pass `pinnedBlock` to align across vaults.
+export async function readVaultState(
+  vault: `0x${string}` = aiVaultAddress,
+  pinnedBlock?: bigint,
+): Promise<VaultState> {
+  const blockNumber = pinnedBlock ?? (await retryRead("blockNumber", () => publicClient.getBlockNumber()));
+  const at = { blockNumber } as const;
+  const balanceWei = await retryRead("vault balance", () => publicClient.getBalance({ address: vault, ...at }));
   const spendLimitPerTx = await retryRead("spendLimitPerTx", () =>
-    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spendLimitPerTx" }),
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spendLimitPerTx", ...at }),
   );
   const dailyLimit = await retryRead("dailyLimit", () =>
-    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "dailyLimit" }),
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "dailyLimit", ...at }),
   );
   const spentToday = await retryRead("spentToday", () =>
-    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spentToday" }),
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "spentToday", ...at }),
   );
   const windowStart = await retryRead("windowStart", () =>
-    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "windowStart" }),
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "windowStart", ...at }),
   );
   const paused = await retryRead("paused", () =>
-    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "paused" }),
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "paused", ...at }),
   );
   const tokenBalanceWei = await retryRead("tokenBalance", () =>
-    publicClient.readContract({ address: mockTokenAddress, abi: ERC20_ABI, functionName: "balanceOf", args: [vault] }),
+    publicClient.readContract({ address: mockTokenAddress, abi: ERC20_ABI, functionName: "balanceOf", args: [vault], ...at }),
   );
-  const priceWei = await readPrice();
+  const priceWei = await readPrice(blockNumber);
 
   return {
     balanceWei,
@@ -126,6 +135,7 @@ export async function readVaultState(vault: `0x${string}` = aiVaultAddress): Pro
     paused: paused as boolean,
     tokenBalanceWei: tokenBalanceWei as bigint,
     priceWei: priceWei as bigint,
+    blockNumber,
   };
 }
 

@@ -85,12 +85,15 @@ async function tick(tickId: string, context: string): Promise<void> {
     protocolId: protocol.id,
   });
 
-  const oracle = await oracleRouter.getPrice("MNT/MOCK");
-  if (oracle.warnings?.length) console.warn("[oracle]", oracle.warnings.join("; "));
-  priceHistory.push(oracle.priceWei);
+  // Atomic, block-pinned snapshot first. Push its canonical same-block price to history so the
+  // features (computed from history) and the prompt (state.priceWei) can never disagree — this is
+  // the fix for the 369 bps split-snapshot bug in the live-run report (section 9).
+  const state = await readVaultState(aiVaultAddress);
+  priceHistory.push(state.priceWei);
   if (priceHistory.length > PRICE_HISTORY_MAX) priceHistory.shift();
 
-  const state = await readVaultState(aiVaultAddress);
+  const oracle = await oracleRouter.getPrice("MNT/MOCK");
+  if (oracle.warnings?.length) console.warn("[oracle]", oracle.warnings.join("; "));
   const portfolioValue = portfolioValueWei(state.balanceWei, state.tokenBalanceWei, state.priceWei);
   if (benchmarkStartValueWei === 0n) benchmarkStartValueWei = portfolioValue;
   const portfolio = portfolioSnapshot(state, benchmarkStartValueWei);
@@ -105,6 +108,7 @@ async function tick(tickId: string, context: string): Promise<void> {
     tickId,
     runner: "ai",
     vault: aiVaultAddress,
+    blockNumber: state.blockNumber?.toString(),
     oracle,
     state,
     portfolio,

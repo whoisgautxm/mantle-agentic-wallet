@@ -65,6 +65,7 @@ async function tick(tickId: string): Promise<void> {
     tickId,
     runner: "baseline",
     vault: baselineVaultAddress,
+    blockNumber: state.blockNumber?.toString(),
     state,
     portfolio,
   });
