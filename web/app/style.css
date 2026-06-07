@@ -101,6 +101,7 @@ h2 {
 }
 
 .insight-card {
+  min-width: 0;
   padding: 20px;
 }
 
@@ -234,6 +235,7 @@ h2 {
 }
 
 .eval-card {
+  min-width: 0;
   border: 1px solid rgba(255, 247, 231, 0.1);
   border-radius: 22px;
   background:

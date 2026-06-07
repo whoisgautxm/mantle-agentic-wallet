@@ -1,4 +1,4 @@
-import addresses from "../../shared/addresses.json";
+import addresses from "../data/addresses.json";
 import type { PortfolioStatus } from "./portfolio";
 import type { StatusResult } from "./status";
 

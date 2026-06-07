@@ -1,5 +1,8 @@
 import { readFile, stat } from "fs/promises";
 import path from "path";
+import openAiReplaySnapshot from "../data/latest-openai-replay-eval.json";
+import scenarioSnapshot from "../data/latest-scenario-summary.json";
+import traceSnapshot from "../data/latest-trace-summary.json";
 
 export type EvalReadinessStatus = "ok" | "warn" | "bad";
 
@@ -68,6 +71,8 @@ interface OpenAiReplaySummary {
       executed?: number;
       blocked?: number;
       held?: number;
+      portfolioRoiBps?: string;
+      maxDrawdownBps?: string;
     }>;
     protocolSignals?: Array<{
       status?: string;
@@ -125,7 +130,14 @@ function displayPath(root: string, filePath: string): string {
   return relative.startsWith("..") ? filePath : relative;
 }
 
-async function readJsonArtifact<T>(paths: readonly string[]): Promise<Artifact<T> | MissingArtifact> {
+function webDataCandidates(root: string, fileName: string): string[] {
+  return [path.join(root, "web", "data", fileName), path.join(root, "data", fileName)];
+}
+
+async function readJsonArtifact<T>(
+  paths: readonly string[],
+  fallback?: Artifact<T>,
+): Promise<Artifact<T> | MissingArtifact> {
   let firstParseError: MissingArtifact | undefined;
 
   for (const filePath of paths) {
@@ -144,7 +156,7 @@ async function readJsonArtifact<T>(paths: readonly string[]): Promise<Artifact<T
     }
   }
 
-  return firstParseError ?? {};
+  return firstParseError ?? fallback ?? {};
 }
 
 function int(value: unknown): number {
@@ -153,23 +165,28 @@ function int(value: unknown): number {
 
 function scenarioCandidates(root: string): string[] {
   const configured = process.env.SCENARIO_EVAL_OUTPUT?.trim();
-  return configured
-    ? [agentPath(root, configured)]
-    : [path.join(root, "agent", "traces", "scenario-summary.json")];
+  return [
+    ...(configured ? [agentPath(root, configured)] : [path.join(root, "agent", "traces", "scenario-summary.json")]),
+    ...webDataCandidates(root, "latest-scenario-summary.json"),
+  ];
 }
 
 function traceCandidates(root: string): string[] {
   const configured = process.env.TRACE_EVAL_OUTPUT?.trim();
-  return configured
-    ? [agentPath(root, configured)]
-    : [path.join(root, "agent", "traces", "trace-summary.json"), path.join(root, "agent", "traces", "summary.json")];
+  return [
+    ...(configured
+      ? [agentPath(root, configured)]
+      : [path.join(root, "agent", "traces", "trace-summary.json"), path.join(root, "agent", "traces", "summary.json")]),
+    ...webDataCandidates(root, "latest-trace-summary.json"),
+  ];
 }
 
 function openAiReplayCandidates(root: string): string[] {
   const configured = process.env.OPENAI_REPLAY_EVAL_OUTPUT?.trim();
-  return configured
-    ? [agentPath(root, configured)]
-    : [path.join(root, "agent", "traces", "openai-replay-eval.json")];
+  return [
+    ...(configured ? [agentPath(root, configured)] : [path.join(root, "agent", "traces", "openai-replay-eval.json")]),
+    ...webDataCandidates(root, "latest-openai-replay-eval.json"),
+  ];
 }
 
 function artifactProblem(root: string, artifact: MissingArtifact): Pick<EvalReadinessItem, "artifactPath" | "detail" | "findings"> {
@@ -188,7 +205,11 @@ function artifactProblem(root: string, artifact: MissingArtifact): Pick<EvalRead
 }
 
 async function scenarioItem(root: string): Promise<EvalReadinessItem> {
-  const artifact = await readJsonArtifact<ScenarioSummary>(scenarioCandidates(root));
+  const artifact = await readJsonArtifact<ScenarioSummary>(scenarioCandidates(root), {
+    data: scenarioSnapshot as ScenarioSummary,
+    path: path.join(root, "web", "data", "latest-scenario-summary.json"),
+    updatedAt: openAiReplaySnapshot.generatedAt,
+  });
   const command = "cd agent && npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json";
 
   if (!("data" in artifact)) {
@@ -236,7 +257,11 @@ async function scenarioItem(root: string): Promise<EvalReadinessItem> {
 }
 
 async function traceItem(root: string): Promise<EvalReadinessItem> {
-  const artifact = await readJsonArtifact<TraceSummary>(traceCandidates(root));
+  const artifact = await readJsonArtifact<TraceSummary>(traceCandidates(root), {
+    data: traceSnapshot as TraceSummary,
+    path: path.join(root, "web", "data", "latest-trace-summary.json"),
+    updatedAt: openAiReplaySnapshot.generatedAt,
+  });
   const command = "cd agent && npm run eval:traces -- traces/agent-events.jsonl traces/trace-summary.json";
 
   if (!("data" in artifact)) {
@@ -288,7 +313,11 @@ function verdictStatus(summary: OpenAiReplaySummary): EvalReadinessStatus {
 }
 
 async function openAiReplayItem(root: string): Promise<EvalReadinessItem> {
-  const artifact = await readJsonArtifact<OpenAiReplaySummary>(openAiReplayCandidates(root));
+  const artifact = await readJsonArtifact<OpenAiReplaySummary>(openAiReplayCandidates(root), {
+    data: openAiReplaySnapshot as OpenAiReplaySummary,
+    path: path.join(root, "web", "data", "latest-openai-replay-eval.json"),
+    updatedAt: openAiReplaySnapshot.generatedAt,
+  });
   const command = "cd agent && npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eval.json";
 
   if (!("data" in artifact)) {
@@ -310,6 +339,8 @@ async function openAiReplayItem(root: string): Promise<EvalReadinessItem> {
   const modelReport = artifact.data.modelReport ?? {};
   const findings = artifact.data.findings ?? modelReport.findings ?? [];
   const runners = artifact.data.replay?.runners ?? [];
+  const ai = runners.find((runner) => runner.runner === "ai");
+  const baseline = runners.find((runner) => runner.runner === "baseline");
   const winner = modelReport.aiVsBaseline?.winner ?? "n/a";
 
   return {
@@ -327,6 +358,8 @@ async function openAiReplayItem(root: string): Promise<EvalReadinessItem> {
       { label: "Safety", value: int(modelReport.safetyScore).toString() },
       { label: "Decision", value: int(modelReport.decisionQualityScore).toString() },
       { label: "Evidence", value: int(modelReport.evidenceQualityScore).toString() },
+      { label: "AI ROI", value: ai?.portfolioRoiBps ?? "n/a" },
+      { label: "Baseline ROI", value: baseline?.portfolioRoiBps ?? "n/a" },
       { label: "Winner", value: winner },
       { label: "Runners", value: runners.length.toString() },
     ],

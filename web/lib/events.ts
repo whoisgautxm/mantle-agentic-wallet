@@ -1,15 +1,15 @@
 import { createPublicClient, http, parseAbiItem } from "viem";
 import { mantleSepoliaTestnet } from "viem/chains";
-import addresses from "../../shared/addresses.json";
+import addresses from "../data/addresses.json";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const fromBlock = BigInt(addresses.deployBlock ?? 0);
 // Log reads need a wide-range RPC. The public Mantle RPC serves the full deployBlock->latest
-// range; Alchemy's free tier caps eth_getLogs at 10 blocks, which would force hundreds of
-// chunked calls and (as previously configured) only show ~1 minute of history. Override with
-// LOGS_RPC_URL if needed; LOG_CHUNK_SIZE is just a safety bound for very long runs.
+// range in bounded chunks. Alchemy's free tier caps eth_getLogs at 10 blocks, so use a
+// historical-log-capable endpoint when CHAIN_REPLAY_SOURCE=live. The public Mantle endpoint
+// accepts 5,000-block windows, while larger ranges are rejected.
 const LOGS_RPC_URL = process.env.LOGS_RPC_URL ?? "https://rpc.sepolia.mantle.xyz";
-const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "50000");
+const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "4999");
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,

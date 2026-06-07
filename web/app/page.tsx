@@ -1,4 +1,5 @@
 import { getDecisions, getPriceHistory, getTrades } from "../lib/events";
+import { getChainReplaySnapshot } from "../lib/chainReplaySnapshot";
 import { buildSeries, currentStanding } from "../lib/pnl";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
@@ -11,7 +12,7 @@ import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
 import SimulationFeedPanel from "./components/SimulationFeedPanel";
 import EvalReadinessPanel from "./components/EvalReadinessPanel";
-import addresses from "../../shared/addresses.json";
+import addresses from "../data/addresses.json";
 import { getEvalReadiness } from "../lib/evalReadiness";
 import { getLendingEvidence } from "../lib/lendingEvidence";
 import { getPortfolioStatus } from "../lib/portfolio";
@@ -53,17 +54,28 @@ export default async function Page() {
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
 
-  const aiDecisionsResult = await safeRead("AI decisions", () => getDecisions(aiVault), []);
-  const baselineDecisionsResult = await safeRead("baseline decisions", () => getDecisions(baselineVault), []);
-  const pricesResult = await safeRead("price history", getPriceHistory, []);
-  const tradesResult = await safeRead("trade history", getTrades, []);
-  const aiDecisions = aiDecisionsResult.value;
-  const baselineDecisions = baselineDecisionsResult.value;
-  const prices = pricesResult.value;
-  const trades = tradesResult.value;
+  const snapshotRequested = (process.env.CHAIN_REPLAY_SOURCE ?? "snapshot").toLowerCase() !== "live";
+  const liveReplay = snapshotRequested
+    ? undefined
+    : await Promise.all([
+        safeRead("AI decisions", () => getDecisions(aiVault), []),
+        safeRead("baseline decisions", () => getDecisions(baselineVault), []),
+        safeRead("price history", getPriceHistory, []),
+        safeRead("trade history", getTrades, []),
+      ]);
+  const aiDecisionsResult = liveReplay?.[0] ?? { value: [] };
+  const baselineDecisionsResult = liveReplay?.[1] ?? { value: [] };
+  const pricesResult = liveReplay?.[2] ?? { value: [] };
+  const tradesResult = liveReplay?.[3] ?? { value: [] };
   const eventWarnings = [aiDecisionsResult, baselineDecisionsResult, pricesResult, tradesResult]
     .map((result) => result.warning)
     .filter(Boolean);
+  const replaySnapshot = getChainReplaySnapshot();
+  const usingSnapshot = snapshotRequested || eventWarnings.length > 0;
+  const aiDecisions = usingSnapshot ? replaySnapshot.aiDecisions : aiDecisionsResult.value;
+  const baselineDecisions = usingSnapshot ? replaySnapshot.baselineDecisions : baselineDecisionsResult.value;
+  const prices = usingSnapshot ? replaySnapshot.prices : pricesResult.value;
+  const trades = usingSnapshot ? replaySnapshot.trades : tradesResult.value;
   const liveStatus = await getLiveStatus();
   const portfolioStatus = await getPortfolioStatus([
     { name: "AI", address: aiVault },
@@ -75,8 +87,16 @@ export default async function Page() {
   const simulationFeed = await getSimulationFeed();
   const lendingEvidence = await getLendingEvidence();
   const evalReadiness = await getEvalReadiness();
-  const series = buildSeries(prices, trades, aiVault, baselineVault);
-  const standing = currentStanding(series);
+  const series = buildSeries(prices, trades, aiVault, baselineVault, usingSnapshot ? replaySnapshot.opening : undefined);
+  const openingPrice = prices[0]?.price ?? 0n;
+  const snapshotStarts = usingSnapshot
+    ? {
+        aiPortfolioWei: replaySnapshot.opening.aiMntWei + (replaySnapshot.opening.aiTokenWei * openingPrice) / 10n ** 18n,
+        baselinePortfolioWei:
+          replaySnapshot.opening.baselineMntWei + (replaySnapshot.opening.baselineTokenWei * openingPrice) / 10n ** 18n,
+      }
+    : undefined;
+  const standing = currentStanding(series, snapshotStarts);
 
   return (
     <main>
@@ -154,24 +174,31 @@ export default async function Page() {
         <EvalReadinessPanel readiness={evalReadiness} />
       </section>
 
-      {eventWarnings.length ? (
+      {usingSnapshot ? (
         <section className="insights single">
           <section className="insight-card">
             <div className="section-head compact">
               <div>
                 <p className="eyebrow">Chain replay</p>
-                <h2>RPC degraded</h2>
+                <h2>Verified event snapshot</h2>
               </div>
-              <span className="badge warn">Fallback</span>
+              <span className="badge ok">Chain-derived</span>
             </div>
             <p className="muted panel-note">
-              Some event-log reads failed, so the chart or feeds may be temporarily incomplete while local eval/protocol panels
-              still render.
+              {eventWarnings.length
+                ? "The live RPC rejected the historical log query, so "
+                : "The dashboard is configured for fast snapshot replay, so "}
+              the chart and feeds use a tracked Mantle Sepolia event snapshot from blocks {replaySnapshot.fromBlock} to{" "}
+              {replaySnapshot.toBlock}. Transaction links remain independently verifiable on the explorer.
             </p>
             <div className="eval-findings">
-              {eventWarnings.map((warning) => (
-                <span key={warning}>{warning}</span>
-              ))}
+              <span>
+                Captured {replaySnapshot.prices.length} prices, {replaySnapshot.trades.length} trades,{" "}
+                {replaySnapshot.aiDecisions.length} AI decisions, and {replaySnapshot.baselineDecisions.length} baseline decisions.
+              </span>
+              <span>
+                Generated {new Date(replaySnapshot.generatedAt).toLocaleString()} from {replaySnapshot.source}.
+              </span>
             </div>
           </section>
         </section>

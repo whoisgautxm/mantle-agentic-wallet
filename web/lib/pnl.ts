@@ -29,6 +29,18 @@ export interface Standing {
   edgeBps: bigint; // AI minus baseline, in basis points of the baseline
 }
 
+export interface OpeningBalances {
+  aiMntWei: bigint;
+  aiTokenWei: bigint;
+  baselineMntWei: bigint;
+  baselineTokenWei: bigint;
+}
+
+export interface BenchmarkStarts {
+  aiPortfolioWei: bigint;
+  baselinePortfolioWei: bigint;
+}
+
 function sameAddress(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
@@ -43,14 +55,15 @@ export function buildSeries(
   trades: Trade[],
   aiVault: string,
   baselineVault: string,
+  opening?: OpeningBalances,
 ): SeriesPoint[] {
   // Reconstruct each vault's MNT balance and token balance from the seed + trade flows.
   // Buy:  MNT -= mntIn (spent),  token += tokensOut.
   // Sell: MNT += mntOut (received), token -= tokensIn.
-  let aiMntWei = START_MNT_WEI;
-  let baselineMntWei = START_MNT_WEI;
-  let aiTokenWei = 0n;
-  let baselineTokenWei = 0n;
+  let aiMntWei = opening?.aiMntWei ?? START_MNT_WEI;
+  let baselineMntWei = opening?.baselineMntWei ?? START_MNT_WEI;
+  let aiTokenWei = opening?.aiTokenWei ?? 0n;
+  let baselineTokenWei = opening?.baselineTokenWei ?? 0n;
   let tradeIndex = 0;
   const series: SeriesPoint[] = [];
 
@@ -92,19 +105,21 @@ export function buildSeries(
 }
 
 /// Current standing for the scoreboard, derived from the last series point.
-export function currentStanding(series: SeriesPoint[]): Standing {
+export function currentStanding(series: SeriesPoint[], starts?: BenchmarkStarts): Standing {
   const last = series[series.length - 1];
   const ai = last ? BigInt(last.aiPortfolioWei) : START_MNT_WEI;
   const baseline = last ? BigInt(last.baselinePortfolioWei) : START_MNT_WEI;
-  const edgeBps = baseline === 0n ? 0n : ((ai - baseline) * 10_000n) / baseline;
+  const aiRoiBps = roiBps(ai, starts?.aiPortfolioWei ?? START_MNT_WEI);
+  const baselineRoiBps = roiBps(baseline, starts?.baselinePortfolioWei ?? START_MNT_WEI);
+  const edgeBps = aiRoiBps - baselineRoiBps;
   let leader: Standing["leader"] = "Tie";
-  if (ai > baseline) leader = "AI";
-  else if (baseline > ai) leader = "Baseline";
+  if (aiRoiBps > baselineRoiBps) leader = "AI";
+  else if (baselineRoiBps > aiRoiBps) leader = "Baseline";
   return {
     aiPortfolioWei: ai,
     baselinePortfolioWei: baseline,
-    aiRoiBps: roiBps(ai, START_MNT_WEI),
-    baselineRoiBps: roiBps(baseline, START_MNT_WEI),
+    aiRoiBps,
+    baselineRoiBps,
     leader,
     edgeBps,
   };

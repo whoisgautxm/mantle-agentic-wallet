@@ -1,8 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { parseEther } from "viem";
+import { formatEther, parseEther } from "viem";
 import { planToDecision, type ProtocolAdapter, type TradeIntent } from "./protocols/types.js";
 import type { Decision, VaultState } from "./types.js";
+
+const DAY_SECONDS = 24n * 60n * 60n;
+const MAX_SELL_POSITION_BPS = 6_000n;
 
 export const PROPOSE_ACTION_TOOL = {
   name: "propose_action",
@@ -66,15 +69,87 @@ export function parseToolUseIntent(input: any): TradeIntent | { action: "hold"; 
   throw new Error(`unknown action: ${input?.action}`);
 }
 
-export async function buildDecisionFromToolUse(input: any, adapter: ProtocolAdapter): Promise<Decision> {
+function minBigint(...values: bigint[]): bigint {
+  return values.reduce((lowest, value) => (value < lowest ? value : lowest));
+}
+
+function remainingDailyLimit(state: VaultState, nowSeconds: bigint): bigint {
+  const spentToday = nowSeconds >= state.windowStart + DAY_SECONDS ? 0n : state.spentToday;
+  return spentToday >= state.dailyLimit ? 0n : state.dailyLimit - spentToday;
+}
+
+function normalizedRationale(rationale: string, message: string): string {
+  return rationale ? `${rationale} Safety sizing: ${message}.` : `Safety sizing: ${message}.`;
+}
+
+export function normalizeTradeIntent(
+  intent: TradeIntent | { action: "hold"; rationale: string },
+  state: VaultState,
+  nowSeconds: bigint = BigInt(Math.floor(Date.now() / 1_000)),
+): TradeIntent | { action: "hold"; rationale: string } {
+  if (intent.action === "hold") return intent;
+
+  if (intent.action === "buy") {
+    const requested = intent.amountMntWei ?? 0n;
+    const maxBuy = minBigint(state.balanceWei, state.spendLimitPerTx, remainingDailyLimit(state, nowSeconds));
+    if (maxBuy <= 0n) {
+      return {
+        action: "hold",
+        rationale: normalizedRationale(intent.rationale, "buy changed to HOLD because no MNT spend capacity remains"),
+      };
+    }
+    const amountMntWei = requested > maxBuy ? maxBuy : requested;
+    return {
+      ...intent,
+      amountMntWei,
+      rationale:
+        amountMntWei === requested
+          ? intent.rationale
+          : normalizedRationale(
+              intent.rationale,
+              `buy capped from ${formatEther(requested)} to ${formatEther(amountMntWei)} MNT`,
+            ),
+    };
+  }
+
+  if (state.tokenBalanceWei <= 0n) {
+    return {
+      action: "hold",
+      rationale: normalizedRationale(intent.rationale, "sell changed to HOLD because token inventory is zero"),
+    };
+  }
+  const requested = intent.amountTokenWei ?? 0n;
+  const proportionalCap = (state.tokenBalanceWei * MAX_SELL_POSITION_BPS) / 10_000n;
+  const maxSell = proportionalCap > 0n ? proportionalCap : state.tokenBalanceWei;
+  const amountTokenWei = requested > maxSell ? maxSell : requested;
+  return {
+    ...intent,
+    amountTokenWei,
+    rationale:
+      amountTokenWei === requested
+        ? intent.rationale
+        : normalizedRationale(
+            intent.rationale,
+            `sell capped from ${formatEther(requested)} to ${formatEther(amountTokenWei)} tokens`,
+          ),
+  };
+}
+
+export async function buildDecisionFromToolUse(
+  input: any,
+  adapter: ProtocolAdapter,
+  state?: VaultState,
+): Promise<Decision> {
   const intent = parseToolUseIntent(input);
-  if (intent.action === "hold") return { kind: "hold", rationale: intent.rationale };
-  const quote = await adapter.quote(intent);
-  const plan = adapter.buildPlan(intent, quote);
-  return planToDecision(plan, intent.rationale);
+  const executableIntent = state ? normalizeTradeIntent(intent, state) : intent;
+  if (executableIntent.action === "hold") return { kind: "hold", rationale: executableIntent.rationale };
+  const quote = await adapter.quote(executableIntent);
+  const plan = adapter.buildPlan(executableIntent, quote);
+  return planToDecision(plan, executableIntent.rationale);
 }
 
 function buildSystemPrompt(state: VaultState): string {
+  const maxSellWei = (state.tokenBalanceWei * MAX_SELL_POSITION_BPS) / 10_000n;
   return (
     "You are an ACTIVE mean-reversion trading agent for a smart-contract vault on Mantle, " +
     "competing head-to-head against a passive dollar-cost-averaging (DCA) baseline. " +
@@ -86,10 +161,14 @@ function buildSystemPrompt(state: VaultState): string {
     "Each turn: buy tokens with MNT, sell tokens for MNT, or hold. " +
     "Buys are bounded by per-tx and remaining daily MNT limits; sells are bounded by token balance. " +
     "Size moves modestly: roughly 0.02-0.05 MNT per buy, or 30-60% of your token balance per sell. " +
-    "Only sell if tokenBalance > 0. For unused trade amount fields, return the string \"0\". " +
-    `State: mntBalance=${state.balanceWei} wei, tokenBalance=${state.tokenBalanceWei} token-wei, ` +
-    `price=${state.priceWei} wei/token, perTxLimit=${state.spendLimitPerTx} wei, ` +
-    `dailyLimit=${state.dailyLimit} wei, spentToday=${state.spentToday} wei, paused=${state.paused}.`
+    "Only sell if tokenBalance > 0. amountMnt and amountToken MUST use human decimal units, never raw wei. " +
+    "For unused trade amount fields, return the string \"0\". " +
+    `State: mntBalance=${formatEther(state.balanceWei)} MNT (${state.balanceWei} wei), ` +
+    `tokenBalance=${formatEther(state.tokenBalanceWei)} tokens (${state.tokenBalanceWei} token-wei), ` +
+    `maxSellThisTurn=${formatEther(maxSellWei)} tokens, ` +
+    `price=${formatEther(state.priceWei)} MNT/token (${state.priceWei} wei/token), ` +
+    `perTxLimit=${formatEther(state.spendLimitPerTx)} MNT, dailyLimit=${formatEther(state.dailyLimit)} MNT, ` +
+    `spentToday=${formatEther(state.spentToday)} MNT, paused=${state.paused}.`
   );
 }
 
@@ -120,7 +199,7 @@ async function decideWithAnthropic(
   if (!toolUse || toolUse.type !== "tool_use") {
     throw new Error("model did not call propose_action");
   }
-  return buildDecisionFromToolUse(toolUse.input, adapter);
+  return buildDecisionFromToolUse(toolUse.input, adapter, state);
 }
 
 async function decideWithOpenAI(
@@ -154,7 +233,7 @@ async function decideWithOpenAI(
   if (!toolCall) {
     throw new Error("model did not call propose_action");
   }
-  return buildDecisionFromToolUse(JSON.parse(toolCall.arguments ?? "{}"), adapter);
+  return buildDecisionFromToolUse(JSON.parse(toolCall.arguments ?? "{}"), adapter, state);
 }
 
 /// Calls the configured model provider and returns a parsed Decision.

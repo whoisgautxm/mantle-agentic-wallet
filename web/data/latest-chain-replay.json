@@ -1,0 +1,213 @@
+{
+  "generatedAt": "2026-06-07T00:46:14.323Z",
+  "chainId": 5003,
+  "fromBlock": "39622400",
+  "toBlock": "39622916",
+  "source": "Mantle Sepolia eth_getLogs",
+  "opening": {
+    "aiMntWei": "890000000000000000",
+    "aiTokenWei": "55493594920669132",
+    "baselineMntWei": "755000000000000000",
+    "baselineTokenWei": "126647387268120331"
+  },
+  "aiDecisions": [
+    {
+      "nonce": "11",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "40000000000000000",
+      "rationale": "Recent average price is about 2.0960 MNT/token, while current price is 2.0023, about 4.5% below the recent average. Mean-reversion suggests buying this pullback with a modest size.",
+      "txHash": "0x81dab78a345381f7b9ad1b4baa2a6115b4701146ad890fa5f56730af43786e9d",
+      "block": "39622916"
+    },
+    {
+      "nonce": "10",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "30000000000000000",
+      "rationale": "The current price was near the recent average and the model chose a modest accumulation size within the vault limits.",
+      "txHash": "0x56cab42a7fb9e84195c09aa36540587e7e63af92c2cfb93bd3d7bc52ed5f1d12",
+      "block": "39622851"
+    },
+    {
+      "nonce": "9",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "0",
+      "rationale": "Current price was about 4% above the recent average. The agent sold part of the position to realize gains while retaining exposure.",
+      "txHash": "0x082a52226a6c0bfa58453a014f9a2b8fd33d246b5432cd4b87ace84c6e0607cc",
+      "block": "39622628"
+    },
+    {
+      "nonce": "8",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "0",
+      "rationale": "Current price was above the recent average, so the agent harvested part of the position within the maximum sell size.",
+      "txHash": "0xdf5e1f14117a234280beb7e6e9d57b37865dc4594fca481fa8c74e355df0b1e1",
+      "block": "39622610"
+    },
+    {
+      "nonce": "7",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "0",
+      "rationale": "A mean-reversion signal identified a short-term price premium and sold a bounded portion of the token inventory.",
+      "txHash": "0xeaf734b385fcbb0ae168bd6ba2190804dc6c46038c93f1fe09f3bcb1744c8a51",
+      "block": "39622592"
+    },
+    {
+      "nonce": "6",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "0",
+      "rationale": "Current price was about 3.3% above the recent average, so the agent sold the maximum allowed portion of inventory.",
+      "txHash": "0x55f6672ea843245b2e3591411cc0c56a411553e9178442c56db68f8285c4df95",
+      "block": "39622573"
+    },
+    {
+      "nonce": "5",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "50000000000000000",
+      "rationale": "Current price was roughly 3.1% below the recent average, producing a bounded buy-the-dip action.",
+      "txHash": "0x7101b58204d4552fe0789585e32a761c831228a48a731f1db0bda196ad08974a",
+      "block": "39622556"
+    },
+    {
+      "nonce": "4",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "30000000000000000",
+      "rationale": "Current price was slightly below the recent average, so the agent made a modest buy within its limits.",
+      "txHash": "0xb52cb3a5aa51a685bb0b33073708f877e7c2cce69efd4f7f3111245c4ce4b21e",
+      "block": "39622536"
+    }
+  ],
+  "baselineDecisions": [
+    {
+      "nonce": "59",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x86739ffa45a140443407bfebf8f4c8563eadc97a7e0b5732680e6fe1e9070dfe",
+      "block": "39622915"
+    },
+    {
+      "nonce": "58",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x835e2ffed0a2d587c56403ae0ac65fb7164093a84f94085e49aae943901180ef",
+      "block": "39622878"
+    },
+    {
+      "nonce": "57",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0xb3b5f50e4b2db65616f59629f60997fb24ff44139423cef8cb8f5005544ab4ff",
+      "block": "39622848"
+    },
+    {
+      "nonce": "56",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x9a5cd43a60b01890cb59fa7705f44d8b7d8e346234990e8b4f9e4afa59277e10",
+      "block": "39622635"
+    },
+    {
+      "nonce": "55",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0xd30eef0975f6074a048e81d842300022cae073333b93d6c7eaf3bd5a9b834866",
+      "block": "39622619"
+    },
+    {
+      "nonce": "54",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x52e9239520d590bcf79b7b1b289d66ea38a880f1cb3bc611f4d3b5d3af4f9b2a",
+      "block": "39622603"
+    },
+    {
+      "nonce": "53",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x2a6aac8f6dd2752fec3600bdacd4a5911c447d93a005568779afba4d4e26b9fd",
+      "block": "39622585"
+    },
+    {
+      "nonce": "52",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x7679fe38721ef3920c90689f3f0015b045c028f16f5658dbb2080ab63bab2d76",
+      "block": "39622568"
+    },
+    {
+      "nonce": "51",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0x0eb4422aef0705327e3d35c0c0b306da090d79c9e4d0694dc415e6a3ca88bb93",
+      "block": "39622552"
+    },
+    {
+      "nonce": "50",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0xca2e2ad42fb41f03e63bc738b94699873942747fe9c0acdd3b1800985624dbcd",
+      "block": "39622536"
+    },
+    {
+      "nonce": "49",
+      "target": "0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc",
+      "value": "5000000000000000",
+      "rationale": "DCA baseline: fixed 0.005 MNT buy",
+      "txHash": "0xb65db8f665fb5573ba6604c9b07ee5e7f21eba12b3ff2ae6d69bdcba0a35ce31",
+      "block": "39622518"
+    }
+  ],
+  "prices": [
+    { "block": "39622516", "price": "2083739142735501664" },
+    { "block": "39622525", "price": "1968094337393927872" },
+    { "block": "39622534", "price": "1886086099788751947" },
+    { "block": "39622543", "price": "1888480859113884405" },
+    { "block": "39622552", "price": "1928526530346938395" },
+    { "block": "39622561", "price": "2035127990482236169" },
+    { "block": "39622570", "price": "2041505913467756220" },
+    { "block": "39622580", "price": "2025228776994982127" },
+    { "block": "39622589", "price": "2111289406001244433" },
+    { "block": "39622598", "price": "2026814271436636759" },
+    { "block": "39622607", "price": "1985643641278391351" },
+    { "block": "39622616", "price": "2081079647128671263" },
+    { "block": "39622626", "price": "2039632786468802824" },
+    { "block": "39622635", "price": "2109463422036363828" },
+    { "block": "39622833", "price": "2138196086801231449" },
+    { "block": "39622848", "price": "2154204313531985483" },
+    { "block": "39622861", "price": "2146345139319284204" },
+    { "block": "39622872", "price": "2079747609564435914" },
+    { "block": "39622885", "price": "2035273278060136473" },
+    { "block": "39622899", "price": "2002254840455031449" },
+    { "block": "39622915", "price": "2032483652532849332" }
+  ],
+  "trades": [
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622518", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2399532598613123", "price": "2083739142735501664", "txHash": "0xb65db8f665fb5573ba6604c9b07ee5e7f21eba12b3ff2ae6d69bdcba0a35ce31" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622536", "side": "buy", "mntWei": "30000000000000000", "tokenWei": "15905954666311417", "price": "1886086099788751947", "txHash": "0xb52cb3a5aa51a685bb0b33073708f877e7c2cce69efd4f7f3111245c4ce4b21e" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622536", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2650992444385236", "price": "1886086099788751947", "txHash": "0xca2e2ad42fb41f03e63bc738b94699873942747fe9c0acdd3b1800985624dbcd" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622552", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2592652951007373", "price": "1928526530346938395", "txHash": "0x0eb4422aef0705327e3d35c0c0b306da090d79c9e4d0694dc415e6a3ca88bb93" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622556", "side": "buy", "mntWei": "50000000000000000", "tokenWei": "25926529510073730", "price": "1928526530346938395", "txHash": "0x7101b58204d4552fe0789585e32a761c831228a48a731f1db0bda196ad08974a" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622568", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2456847934569077", "price": "2035127990482236169", "txHash": "0x7679fe38721ef3920c90689f3f0015b045c028f16f5658dbb2080ab63bab2d76" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622573", "side": "sell", "mntWei": "119215059606760133", "tokenWei": "58395647458232567", "price": "2041505913467756220", "txHash": "0x55f6672ea843245b2e3591411cc0c56a411553e9178442c56db68f8285c4df95" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622585", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2468856880168846", "price": "2025228776994982127", "txHash": "0x2a6aac8f6dd2752fec3600bdacd4a5911c447d93a005568779afba4d4e26b9fd" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622592", "side": "sell", "mntWei": "49316044734059966", "tokenWei": "23358258983293027", "price": "2111289406001244433", "txHash": "0xeaf734b385fcbb0ae168bd6ba2190804dc6c46038c93f1fe09f3bcb1744c8a51" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622603", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2466925593757500", "price": "2026814271436636759", "txHash": "0x52e9239520d590bcf79b7b1b289d66ea38a880f1cb3bc611f4d3b5d3af4f9b2a" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622610", "side": "sell", "mntWei": "14892327309587935", "tokenWei": "7500000000000000", "price": "1985643641278391351", "txHash": "0xdf5e1f14117a234280beb7e6e9d57b37865dc4594fca481fa8c74e355df0b1e1" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622619", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2402599058089223", "price": "2081079647128671263", "txHash": "0xd30eef0975f6074a048e81d842300022cae073333b93d6c7eaf3bd5a9b834866" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622628", "side": "sell", "mntWei": "9878560803751948", "tokenWei": "4843303593317211", "price": "2039632786468802824", "txHash": "0x082a52226a6c0bfa58453a014f9a2b8fd33d246b5432cd4b87ace84c6e0607cc" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622635", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2370271011939740", "price": "2109463422036363828", "txHash": "0x9a5cd43a60b01890cb59fa7705f44d8b7d8e346234990e8b4f9e4afa59277e10" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622848", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2338419769292564", "price": "2138196086801231449", "txHash": "0xb3b5f50e4b2db65616f59629f60997fb24ff44139423cef8cb8f5005544ab4ff" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622851", "side": "buy", "mntWei": "30000000000000000", "tokenWei": "13926255653444805", "price": "2154204313531985483", "txHash": "0x56cab42a7fb9e84195c09aa36540587e7e63af92c2cfb93bd3d7bc52ed5f1d12" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622878", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2404137875675768", "price": "2079747609564435914", "txHash": "0x835e2ffed0a2d587c56403ae0ac65fb7164093a84f94085e49aae943901180ef" },
+    { "who": "0x8997b913132fCd0d3345C05971fe229104bd2B66", "block": "39622915", "side": "buy", "mntWei": "5000000000000000", "tokenWei": "2460044386467304", "price": "2032483652532849332", "txHash": "0x86739ffa45a140443407bfebf8f4c8563eadc97a7e0b5732680e6fe1e9070dfe" },
+    { "who": "0xd608208F805293A209Bb4f80eA56e499d3e0e8e1", "block": "39622916", "side": "buy", "mntWei": "40000000000000000", "tokenWei": "19680355091738438", "price": "2032483652532849332", "txHash": "0x81dab78a345381f7b9ad1b4baa2a6115b4701146ad890fa5f56730af43786e9d" }
+  ]
+}

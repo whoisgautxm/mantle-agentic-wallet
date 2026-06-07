@@ -1,5 +1,6 @@
 import { readFile, stat } from "fs/promises";
 import path from "path";
+import { protocolEvidenceSnapshot } from "./protocolEvidenceSnapshot";
 
 export type ProtocolEvidenceStatus = "ok" | "warn" | "bad";
 
@@ -198,18 +199,28 @@ function unique(values: string[]): string[] {
 }
 
 function traceCandidates(root: string): string[] {
+  const snapshots = [
+    path.join(root, "web", "data", "latest-protocol-evidence.jsonl"),
+    path.join(root, "data", "latest-protocol-evidence.jsonl"),
+  ];
   const configured = process.env.TRACE_JSONL_PATH?.trim();
   if (configured) {
-    return unique(path.isAbsolute(configured) ? [configured] : [agentPath(root, configured), path.join(root, configured)]);
+    return unique([
+      ...(path.isAbsolute(configured) ? [configured] : [agentPath(root, configured), path.join(root, configured)]),
+      ...snapshots,
+    ]);
   }
 
   const traceDir = process.env.TRACE_DIR?.trim();
   if (traceDir) {
     const traceFile = path.join(traceDir, "agent-events.jsonl");
-    return unique(path.isAbsolute(traceFile) ? [traceFile] : [agentPath(root, traceFile), path.join(root, traceFile)]);
+    return unique([
+      ...(path.isAbsolute(traceFile) ? [traceFile] : [agentPath(root, traceFile), path.join(root, traceFile)]),
+      ...snapshots,
+    ]);
   }
 
-  return [path.join(root, "agent", "traces", "agent-events.jsonl")];
+  return [path.join(root, "agent", "traces", "agent-events.jsonl"), ...snapshots];
 }
 
 async function readTraceArtifact(paths: readonly string[]): Promise<TraceArtifact | MissingTraceArtifact> {
@@ -243,7 +254,13 @@ async function readTraceArtifact(paths: readonly string[]): Promise<TraceArtifac
     }
   }
 
-  return firstParseError ?? {};
+  return (
+    firstParseError ?? {
+      events: [...protocolEvidenceSnapshot] as unknown as TraceEvent[],
+      path: path.join(workspaceRoot(), "web", "data", "latest-protocol-evidence.jsonl"),
+      updatedAt: protocolEvidenceSnapshot[protocolEvidenceSnapshot.length - 1].ts,
+    }
+  );
 }
 
 function latestMerchantMoeEvent(events: readonly TraceEvent[]): TraceEvent | undefined {

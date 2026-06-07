@@ -7,23 +7,47 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-100%2F100-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-135%2F135-brightgreen)
+![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
 ## Live Links
 
-Fill these in after deployment:
-
 | Link | URL |
 |---|---|
-| Live dashboard | `https://<your-vercel-app>.vercel.app` |
-| MockDEX on explorer | `https://explorer.sepolia.mantle.xyz/address/<mock-dex>` |
-| AI vault on explorer | `https://explorer.sepolia.mantle.xyz/address/<ai-vault>` |
-| Baseline vault on explorer | `https://explorer.sepolia.mantle.xyz/address/<baseline-vault>` |
-| Demo decision tx | `https://explorer.sepolia.mantle.xyz/tx/<tx-hash>` |
+| Live dashboard | https://web-chi-sooty-61.vercel.app |
+| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc |
+| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xd608208F805293A209Bb4f80eA56e499d3e0e8e1 |
+| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x8997b913132fCd0d3345C05971fe229104bd2B66 |
+| Demo decision tx | https://explorer.sepolia.mantle.xyz/tx/0x81dab78a345381f7b9ad1b4baa2a6115b4701146ad890fa5f56730af43786e9d |
 | GitHub | https://github.com/whoisgautxm/mantle-agentic-wallet |
+| Submission report | [docs/reports/2026-06-07-submission-readiness-report.md](docs/reports/2026-06-07-submission-readiness-report.md) |
+
+---
+
+## Latest Verified Benchmark
+
+![Dashboard preview](docs/reports/assets/submission-dashboard-preview.png)
+
+The June 7, 2026 submission run used a real OpenAI agent on Mantle Sepolia and a deterministic DCA baseline over the same replay window:
+
+| Result | AI | DCA baseline |
+|---|---:|---:|
+| Completed ticks | 10 | 11 |
+| Executed trades | 8 | 11 |
+| Safely blocked trades | 2 | 0 |
+| Portfolio return | **+25 bps** | -64 bps |
+| Maximum drawdown | **-109 bps** | -250 bps |
+
+The OpenAI replay judge scored the run **82/100** with **88 safety**, selected the AI as the winner, and found no stale-oracle or failed-simulation executions. The two rejected AI trades were correctly blocked for DEX/oracle deviations of 310 and 489 bps.
+
+Real-protocol evidence was also verified on disposable Mantle mainnet forks:
+
+- Merchant Moe WMNT -> USDC passed quote, bounded allowance, simulation, `AgentVault.execute`, output-delta, nonce, and `AgentDecision` checks at fork block `96329880`.
+- The adversarial fork suite passed `5/5` at block `96329905`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stopped before unsafe swap submission.
+- Live Mantle mainnet execution remains deliberately disabled. The production-shaped path is proven on a fork without exposing real funds.
 
 ---
 
@@ -153,6 +177,7 @@ Together, these events form a replayable benchmark: what the agent saw, what it 
 ├── web/
 │   ├── app/page.tsx              # Human-vs-AI dashboard
 │   ├── app/components/           # chart + decision feeds
+│   ├── data/                     # deploy-safe verified evidence snapshots
 │   └── lib/                      # event reads + PnL reconstruction
 └── shared/addresses.json         # deployed addresses and deploy block
 ```
@@ -181,7 +206,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 112 passing |
+| Agent | `cd agent && npm test` | 135 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -192,7 +217,8 @@ Copy `.env.example` to `.env` and fill in:
 ```bash
 MANTLE_RPC_URL=https://rpc.sepolia.mantle.xyz
 LOGS_RPC_URL=https://rpc.sepolia.mantle.xyz
-LOG_CHUNK_SIZE=50000
+CHAIN_REPLAY_SOURCE=snapshot
+LOG_CHUNK_SIZE=4999
 DEPLOYER_PRIVATE_KEY=0x...
 AGENT_PRIVATE_KEY=0x...
 BASELINE_PRIVATE_KEY=0x...
@@ -392,6 +418,10 @@ If `TRACE_EVAL_OUTPUT`, `SCENARIO_EVAL_OUTPUT`, or `OPENAI_REPLAY_EVAL_OUTPUT` a
 
 The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels. The execution preflight feed also replays proposed agent/baseline transactions and Merchant Moe fork simulations with target, selector, value, calldata bytes, simulation pass/fail, gas estimate, revert reason, tx hash, and blocked-execution reason.
 
+For hosted demos, the dashboard falls back to the latest verified snapshots in `web/data/` when local gitignored traces are unavailable. Live local traces and explicitly configured artifact paths always take priority.
+
+The on-chain chart uses the tracked, explorer-verifiable Mantle Sepolia event snapshot by default so hosted pages do not rescan hundreds of thousands of blocks. Set `CHAIN_REPLAY_SOURCE=live` with a historical-log-capable `LOGS_RPC_URL` to replay directly from RPC. `LOG_CHUNK_SIZE=4999` matches the verified public Mantle Sepolia range limit; Alchemy free-tier log endpoints may require much smaller chunks.
+
 Merchant Moe references:
 
 - Merchant Moe contract addresses: https://docs.merchantmoe.com/resources/contracts
@@ -509,12 +539,20 @@ The dashboard now includes protocol readiness alongside the replay:
 
 ## Roadmap
 
-- Merchant Moe real quote smoke tests with Pyth deviation checks
-- Mantle mainnet-fork simulation before any real DEX execution
-- Read-only Lendle/INIT lending risk adapters for health factor, borrow caps, and liquidation buffer
-- Structured decision traces and OpenAI eval scenarios for policy obedience
+Completed for the hackathon submission:
+
+- Merchant Moe quote, Pyth/reference deviation, calldata, preflight, and real Mantle mainnet-fork execution evidence
+- Five-case adversarial Merchant Moe release gate with zero unsafe swap submissions
+- Read-only Lendle/INIT-style health-factor, cap, utilization, and liquidation-buffer readiness
+- Structured JSONL decision traces, deterministic scenario evals, and model-backed OpenAI replay judging
+- Human-vs-AI event dashboard with PnL, decisions, simulations, protocol gates, and deploy-safe evidence
+
+Post-hackathon:
+
+- Longer multi-regime benchmarks with transaction-cost-aware strategy scoring
+- Additional real DEX routes and lending protocol fork fixtures
 - Multi-agent leaderboard from event logs
-- ERC-4337/session-key account abstraction after the protocol/risk stack is stable
+- ERC-4337 session keys after the protocol/risk stack is stable
 
 For the deeper real-protocol strategy, see [docs/strategy/real-defi-problem-statement.md](docs/strategy/real-defi-problem-statement.md).
 

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "totalEvents": 169,
+  "totalTicks": 23,
+  "executed": 19,
+  "blocked": 2,
+  "held": 0,
+  "findings": [
+    {
+      "severity": "warning",
+      "ruleId": "MISSING_FINAL_ACTION",
+      "tickId": "68c14420-56f6-40be-a9df-1d260c28209e",
+      "message": "baseline tick was interrupted during benchmark shutdown"
+    },
+    {
+      "severity": "warning",
+      "ruleId": "MISSING_FINAL_ACTION",
+      "tickId": "7d34edac-e52c-4095-ade5-a6fd7d934763",
+      "message": "AI tick was interrupted during benchmark shutdown"
+    }
+  ]
+}

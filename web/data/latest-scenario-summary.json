@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "results": [
+    {
+      "name": "safe-buy",
+      "ok": true,
+      "expected": { "ok": true },
+      "actual": { "ok": true }
+    },
+    {
+      "name": "stale-oracle-block",
+      "ok": true,
+      "expected": { "ok": false, "ruleId": "ORACLE_STALE" },
+      "actual": { "ok": false, "ruleId": "ORACLE_STALE" }
+    },
+    {
+      "name": "failed-simulation-block",
+      "ok": true,
+      "expected": { "ok": false, "ruleId": "SIMULATION_FAILED" },
+      "actual": { "ok": false, "ruleId": "SIMULATION_FAILED" }
+    },
+    {
+      "name": "bad-target-block",
+      "ok": true,
+      "expected": { "ok": false, "ruleId": "TARGET_NOT_ALLOWED" },
+      "actual": { "ok": false, "ruleId": "TARGET_NOT_ALLOWED" }
+    },
+    {
+      "name": "oversized-trade-block",
+      "ok": true,
+      "expected": { "ok": false, "ruleId": "MAX_TRADE_VALUE" },
+      "actual": { "ok": false, "ruleId": "MAX_TRADE_VALUE" }
+    }
+  ]
+}

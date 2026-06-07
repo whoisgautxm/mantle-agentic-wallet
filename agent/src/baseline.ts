@@ -6,6 +6,7 @@ import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
 import { planToDecision } from "./protocols/types.js";
+import { portfolioSnapshot, portfolioValueWei } from "./pnl.js";
 import { evaluateRisk } from "./risk/engine.js";
 import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
@@ -17,6 +18,7 @@ const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
 const trace = createJsonlTraceWriter();
+let benchmarkStartValueWei = 0n;
 
 async function recordTrace(type: string, payload: Record<string, unknown>): Promise<void> {
   try {
@@ -37,11 +39,15 @@ async function tick(): Promise<void> {
   });
 
   const state = await readVaultState(baselineVaultAddress);
+  const portfolioValue = portfolioValueWei(state.balanceWei, state.tokenBalanceWei, state.priceWei);
+  if (benchmarkStartValueWei === 0n) benchmarkStartValueWei = portfolioValue;
+  const portfolio = portfolioSnapshot(state, benchmarkStartValueWei);
   await recordTrace("agent.observation", {
     tickId,
     runner: "baseline",
     vault: baselineVaultAddress,
     state,
+    portfolio,
   });
   if (state.paused) {
     console.log("[baseline] paused; skipping");
@@ -50,6 +56,7 @@ async function tick(): Promise<void> {
       runner: "baseline",
       outcome: "hold",
       reason: "vault paused",
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -85,6 +92,7 @@ async function tick(): Promise<void> {
       outcome: "blocked",
       reason: "adapter produced a non-executable decision",
       decision,
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -114,11 +122,16 @@ async function tick(): Promise<void> {
     simulation,
     limits: riskLimits,
   });
+  const executionPolicy = {
+    localTargetAllowed: protocolRegistry.allowedTargets().includes(decision.target),
+    localSelectorAllowed: protocolRegistry.allowedSelectors().includes(decision.calldata.slice(0, 10) as `0x${string}`),
+  };
   await recordTrace("agent.risk", {
     tickId,
     runner: "baseline",
     risk,
     limits: riskLimits,
+    executionPolicy,
   });
   if (!risk.ok) {
     console.log("[baseline] blocked:", risk.reason);
@@ -129,10 +142,13 @@ async function tick(): Promise<void> {
       reason: risk.reason,
       ruleId: risk.ruleId,
       decision,
+      executionPolicy,
+      portfolioAfter: portfolio,
     });
     return;
   }
-  if (!(await isTargetAllowed(baselineVaultAddress, decision.target))) {
+  const onchainTargetAllowed = await isTargetAllowed(baselineVaultAddress, decision.target);
+  if (!onchainTargetAllowed) {
     console.log("[baseline] blocked: DEX not allowlisted");
     await recordTrace("agent.final_action", {
       tickId,
@@ -140,6 +156,8 @@ async function tick(): Promise<void> {
       outcome: "blocked",
       reason: "DEX not allowlisted",
       decision,
+      executionPolicy: { ...executionPolicy, onchainTargetAllowed },
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -147,12 +165,17 @@ async function tick(): Promise<void> {
   const hash = await submitExecute(baselineVaultAddress, decision, baselineClient, { simulation });
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[baseline executed]", `${base}/tx/${hash}`);
+  const stateAfter = await readVaultState(baselineVaultAddress);
+  const portfolioAfter = portfolioSnapshot(stateAfter, benchmarkStartValueWei);
   await recordTrace("agent.final_action", {
     tickId,
     runner: "baseline",
     outcome: "executed",
     txHash: hash,
     decision,
+    executionPolicy: { ...executionPolicy, onchainTargetAllowed },
+    portfolioBefore: portfolio,
+    portfolioAfter,
   });
 }
 

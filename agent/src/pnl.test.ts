@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { portfolioValueWei, roiBps } from "./pnl.js";
+import { portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
 
 describe("portfolioValueWei", () => {
   it("adds MNT balance and token value", () => {
@@ -22,5 +22,27 @@ describe("roiBps", () => {
 
   it("returns zero when the reference value is zero", () => {
     expect(roiBps(100n, 0n)).toBe(0n);
+  });
+});
+
+describe("portfolioSnapshot", () => {
+  it("records balances, token value, and replay-window ROI", () => {
+    const snapshot = portfolioSnapshot(
+      {
+        balanceWei: 8n * 10n ** 17n,
+        tokenBalanceWei: 1n * 10n ** 17n,
+        priceWei: 2n * 10n ** 18n,
+        spendLimitPerTx: 1n,
+        dailyLimit: 1n,
+        spentToday: 0n,
+        windowStart: 0n,
+        paused: false,
+      },
+      9n * 10n ** 17n,
+    );
+
+    expect(snapshot.tokenValueWei).toBe(2n * 10n ** 17n);
+    expect(snapshot.portfolioValueWei).toBe(1n * 10n ** 18n);
+    expect(snapshot.roiBps).toBe(1111n);
   });
 });

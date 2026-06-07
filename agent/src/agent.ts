@@ -5,7 +5,7 @@ import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./cha
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
 import { chain, aiVaultAddress, dexAddress, agentAccount } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
-import { portfolioValueWei, roiBps } from "./pnl.js";
+import { portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
 import { evaluateRisk } from "./risk/engine.js";
@@ -35,6 +35,7 @@ const MAX_DRAWDOWN_BPS = -1500n;
 const priceHistory: bigint[] = [];
 const trace = createJsonlTraceWriter();
 let peakValueWei = 0n;
+let benchmarkStartValueWei = 0n;
 let breakerTripped = false;
 
 async function recordTrace(type: string, payload: Record<string, unknown>): Promise<void> {
@@ -62,6 +63,9 @@ async function tick(context: string): Promise<void> {
   if (priceHistory.length > PRICE_HISTORY_MAX) priceHistory.shift();
 
   const state = await readVaultState(aiVaultAddress);
+  const portfolioValue = portfolioValueWei(state.balanceWei, state.tokenBalanceWei, state.priceWei);
+  if (benchmarkStartValueWei === 0n) benchmarkStartValueWei = portfolioValue;
+  const portfolio = portfolioSnapshot(state, benchmarkStartValueWei);
   console.log("[state]", {
     mnt: state.balanceWei.toString(),
     token: state.tokenBalanceWei.toString(),
@@ -75,6 +79,7 @@ async function tick(context: string): Promise<void> {
     vault: aiVaultAddress,
     oracle,
     state,
+    portfolio,
     priceHistory,
   });
 
@@ -85,11 +90,11 @@ async function tick(context: string): Promise<void> {
       runner: "ai",
       outcome: "hold",
       reason: "vault paused",
+      portfolioAfter: portfolio,
     });
     return;
   }
 
-  const portfolioValue = portfolioValueWei(state.balanceWei, state.tokenBalanceWei, state.priceWei);
   if (portfolioValue > peakValueWei) peakValueWei = portfolioValue;
   const drawdownBps = roiBps(portfolioValue, peakValueWei);
   if (drawdownBps <= MAX_DRAWDOWN_BPS) {
@@ -109,6 +114,7 @@ async function tick(context: string): Promise<void> {
       portfolioValue,
       peakValueWei,
       drawdownBps,
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -151,6 +157,7 @@ async function tick(context: string): Promise<void> {
       runner: "ai",
       outcome: "hold",
       decision,
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -172,11 +179,16 @@ async function tick(context: string): Promise<void> {
     simulation,
     limits: riskLimits,
   });
+  const executionPolicy = {
+    localTargetAllowed: protocolRegistry.allowedTargets().includes(decision.target),
+    localSelectorAllowed: protocolRegistry.allowedSelectors().includes(decision.calldata.slice(0, 10) as `0x${string}`),
+  };
   await recordTrace("agent.risk", {
     tickId,
     runner: "ai",
     risk,
     limits: riskLimits,
+    executionPolicy,
   });
   if (!risk.ok) {
     console.log("[guard] blocked:", risk.reason);
@@ -187,11 +199,14 @@ async function tick(context: string): Promise<void> {
       reason: risk.reason,
       ruleId: risk.ruleId,
       decision,
+      executionPolicy,
+      portfolioAfter: portfolio,
     });
     return;
   }
 
-  if (!(await isTargetAllowed(aiVaultAddress, decision.target))) {
+  const onchainTargetAllowed = await isTargetAllowed(aiVaultAddress, decision.target);
+  if (!onchainTargetAllowed) {
     console.log("[guard] blocked: target not allowlisted on-chain:", decision.target);
     await recordTrace("agent.final_action", {
       tickId,
@@ -199,6 +214,8 @@ async function tick(context: string): Promise<void> {
       outcome: "blocked",
       reason: "target not allowlisted on-chain",
       decision,
+      executionPolicy: { ...executionPolicy, onchainTargetAllowed },
+      portfolioAfter: portfolio,
     });
     return;
   }
@@ -207,12 +224,17 @@ async function tick(context: string): Promise<void> {
   const base = (chain.blockExplorers?.default.url ?? "").replace(/\/$/, "");
   console.log("[executed]", `${base}/tx/${hash}`);
   await sendAlert(decision, hash);
+  const stateAfter = await readVaultState(aiVaultAddress);
+  const portfolioAfter = portfolioSnapshot(stateAfter, benchmarkStartValueWei);
   await recordTrace("agent.final_action", {
     tickId,
     runner: "ai",
     outcome: "executed",
     txHash: hash,
     decision,
+    executionPolicy: { ...executionPolicy, onchainTargetAllowed },
+    portfolioBefore: portfolio,
+    portfolioAfter,
   });
 }
 
