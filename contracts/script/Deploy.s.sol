@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {AgentVault} from "../src/AgentVault.sol";
 import {MockDEX} from "../src/MockDEX.sol";
+import {MockOracle} from "../src/MockOracle.sol";
 
 contract Deploy is Script {
     function run() external {
@@ -21,20 +22,28 @@ contract Deploy is Script {
         (bool okDex,) = address(dex).call{value: 3 ether}(""); // liquidity to pay out sells
         require(okDex, "dex seed failed");
 
+        // Independent on-chain price reference for guarded-trade floors (kept in sync by the keeper).
+        MockOracle oracle = new MockOracle(startPrice);
+        address tradedToken = address(dex.token());
+        uint256 maxOracleDeviationBps = 500; // declared minOut may sit up to 5% below oracle-fair
+
         AgentVault aiVault = new AgentVault(aiAgent, perTx, daily);
         (bool okAi,) = address(aiVault).call{value: 1 ether}(""); // equal starting capital
         require(okAi, "ai seed failed");
         aiVault.setAllowedTarget(address(dex), true);
         aiVault.setGuardedTarget(address(dex), true);
+        aiVault.setOracle(address(oracle), tradedToken, maxOracleDeviationBps);
 
         AgentVault baselineVault = new AgentVault(baselineAgent, perTx, daily);
         (bool okBaseline,) = address(baselineVault).call{value: 1 ether}(""); // equal starting capital
         require(okBaseline, "baseline seed failed");
         baselineVault.setAllowedTarget(address(dex), true);
         baselineVault.setGuardedTarget(address(dex), true);
+        baselineVault.setOracle(address(oracle), tradedToken, maxOracleDeviationBps);
         vm.stopBroadcast();
 
         console.log("MockDEX deployed at:", address(dex));
+        console.log("MockOracle deployed at:", address(oracle));
         console.log("MockToken deployed at:", address(dex.token()));
         console.log("AI AgentVault deployed at:", address(aiVault));
         console.log("Baseline AgentVault deployed at:", address(baselineVault));

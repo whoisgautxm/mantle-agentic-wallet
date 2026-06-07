@@ -7,6 +7,8 @@ import {MockTarget} from "./mocks/MockTarget.sol";
 import {MockReentrant} from "./mocks/MockReentrant.sol";
 import {MockGuardedTarget} from "./mocks/MockGuardedTarget.sol";
 import {MockReentrantAgent} from "./mocks/MockReentrantAgent.sol";
+import {MockDEX} from "../src/MockDEX.sol";
+import {MockOracle} from "../src/MockOracle.sol";
 
 contract AgentVaultTest is Test {
     AgentVault vault;
@@ -305,6 +307,85 @@ contract AgentVaultTest is Test {
         vm.expectRevert(bytes("call failed"));
         evil.start();
         assertEq(guardedVault.nonce(), 0);
+    }
+
+    // --- Oracle-bound minOut (closes the "agent declares a low positive floor" gap) ---
+
+    // NOTE: token address is hoisted into a local before vm.prank — evaluating address(dex.token())
+    // inside the executeGuarded argument list would otherwise consume the prank (a Foundry gotcha).
+    function _setupOracleDex(uint256 dexPrice, uint256 oraclePrice, uint256 maxDevBps)
+        internal
+        returns (MockDEX dex, address token)
+    {
+        dex = new MockDEX(dexPrice);
+        (bool ok,) = address(dex).call{value: 5 ether}("");
+        require(ok, "dex fund failed");
+        token = address(dex.token());
+        MockOracle oracle = new MockOracle(oraclePrice);
+        vault.setAllowedTarget(address(dex), true);
+        vault.setGuardedTarget(address(dex), true);
+        vault.setOracle(address(oracle), token, maxDevBps);
+    }
+
+    function test_setOracle_onlyOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert(AgentVault.NotOwner.selector);
+        vault.setOracle(address(0x1234), address(0x5678), 500);
+    }
+
+    function test_oracleFloor_buy_rejectsFloorBelowOracle() public {
+        (MockDEX dex, address token) = _setupOracleDex(0.2 ether, 0.2 ether, 500); // 5% tolerance
+        bytes memory buyData = abi.encodeCall(MockDEX.buy, ());
+        // value 0.1 -> oracle expects 0.5 token; floor = 0.475. minOut 0.4 < floor -> revert.
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(AgentVault.OracleFloorTooLow.selector, 0.4 ether, 0.475 ether));
+        vault.executeGuarded(address(dex), 0.1 ether, buyData, token, 0.4 ether, "lowball buy");
+    }
+
+    function test_oracleFloor_buy_acceptsFairFloor() public {
+        (MockDEX dex, address token) = _setupOracleDex(0.2 ether, 0.2 ether, 500);
+        bytes memory buyData = abi.encodeCall(MockDEX.buy, ());
+        vm.prank(agent);
+        vault.executeGuarded(address(dex), 0.1 ether, buyData, token, 0.475 ether, "fair buy");
+        assertEq(dex.token().balanceOf(address(vault)), 0.5 ether);
+    }
+
+    function test_oracleFloor_sell_rejectsFloorBelowOracle() public {
+        (MockDEX dex, address token) = _setupOracleDex(0.2 ether, 0.2 ether, 500);
+        bytes memory buyData = abi.encodeCall(MockDEX.buy, ());
+        vm.prank(agent);
+        vault.executeGuarded(address(dex), 0.1 ether, buyData, token, 0.475 ether, "buy");
+        // sell 0.5 token -> oracle expects 0.1 MNT; floor 0.095. minOut 0.05 < floor -> revert.
+        bytes memory sellData = abi.encodeCall(MockDEX.sell, (0.5 ether));
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(AgentVault.OracleFloorTooLow.selector, 0.05 ether, 0.095 ether));
+        vault.executeGuarded(address(dex), 0, sellData, address(0), 0.05 ether, "lowball sell");
+    }
+
+    function test_oracleFloor_sell_acceptsFairFloor() public {
+        (MockDEX dex, address token) = _setupOracleDex(0.2 ether, 0.2 ether, 500);
+        bytes memory buyData = abi.encodeCall(MockDEX.buy, ());
+        vm.prank(agent);
+        vault.executeGuarded(address(dex), 0.1 ether, buyData, token, 0.475 ether, "buy");
+        uint256 beforeBal = address(vault).balance;
+        bytes memory sellData = abi.encodeCall(MockDEX.sell, (0.5 ether));
+        vm.prank(agent);
+        vault.executeGuarded(address(dex), 0, sellData, address(0), 0.095 ether, "fair sell");
+        assertEq(address(vault).balance, beforeBal + 0.1 ether);
+    }
+
+    function test_oracleFloor_disabledWhenUnset() public {
+        // No setOracle -> caller floor only (backward compatible). A tiny minOut is accepted.
+        MockDEX dex = new MockDEX(0.2 ether);
+        (bool ok,) = address(dex).call{value: 5 ether}("");
+        require(ok, "fund failed");
+        address token = address(dex.token());
+        vault.setAllowedTarget(address(dex), true);
+        vault.setGuardedTarget(address(dex), true);
+        bytes memory buyData = abi.encodeCall(MockDEX.buy, ());
+        vm.prank(agent);
+        vault.executeGuarded(address(dex), 0.1 ether, buyData, token, 1, "no oracle");
+        assertEq(dex.token().balanceOf(address(vault)), 0.5 ether);
     }
 
     receive() external payable {}

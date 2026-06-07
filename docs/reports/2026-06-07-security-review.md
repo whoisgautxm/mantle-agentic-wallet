@@ -15,9 +15,9 @@ The red-team Forge test proves a direct legacy bypass attempt preserves vault ba
 
 ### Medium: Minimum output is caller-selected
 
-**Status:** Accepted and documented.
+**Status:** Mitigated (follow-up, June 7, 2026).
 
-The vault enforces the supplied `minOut` but does not derive it from an on-chain oracle. The normal agent path computes the floor from quote and slippage policy, but a fully compromised agent key can submit a very low positive floor. This implementation provides hard settlement enforcement, not oracle-authenticated intent. `SECURITY.md` states this boundary explicitly.
+Originally the vault enforced the supplied `minOut` but did not derive it from an on-chain oracle, so a fully compromised agent key could submit a very low positive floor. `AgentVault.setOracle` + `_enforceOracleFloor` now bind the declared `minOut` to an owner-configured on-chain price oracle: for both buys (native input known) and sells (traded-token input measured by balance delta), the vault requires `minOut >= oracleFairOutput * (10_000 - maxOracleDeviationBps) / 10_000`. Combined with the existing `received >= minOut` check, actual settlement is bounded to oracle-fair value minus tolerance. Deployment wires `MockOracle` to both vaults at `maxOracleDeviationBps = 500`, and the keeper keeps the oracle in lockstep with the venue price. Forge tests cover buy/sell reject-below-floor, accept-at-floor, and disabled-when-unset. Residual trust: the owner must configure an honest oracle; oracle integrity itself remains out of the vault's scope.
 
 ### Low: Token balance semantics are protocol-dependent
 

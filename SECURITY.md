@@ -13,6 +13,7 @@ This project is a hackathon prototype, not an audited production wallet. It sepa
 | Per-transaction and rolling daily value limits | On-chain | Unbounded native-token outflow |
 | Positive minimum output | On-chain | Zero-floor guarded calls |
 | Output balance delta | On-chain | An allowlisted call delivering less than the declared `minOut` |
+| Oracle-bound minimum output | On-chain (opt-in) | A compromised agent declaring a `minOut` far below the oracle-fair price |
 | Reentrancy lock | On-chain | Nested vault execution during an external call |
 | Oracle freshness and quote deviation | Off-chain preflight | Trading against stale or manipulated reference data |
 | Position and trade-value limits | Off-chain preflight | Excessive portfolio concentration |
@@ -23,13 +24,14 @@ This project is a hackathon prototype, not an audited production wallet. It sepa
 ## Trust Assumptions
 
 - The human owner correctly configures allowlisted and guard-required targets.
-- The agent key remains scoped but can still choose calldata, output asset, and a positive `minOut`.
+- The agent key remains scoped; its declared `minOut` is additionally floored on-chain against the owner-configured oracle, so it cannot settle a guarded trade far below oracle-fair value.
+- The owner configures an honest price oracle and keeps it reasonably in sync with the execution venue; the deviation tolerance (`maxOracleDeviationBps`) absorbs normal slippage.
 - Allowlisted protocols and ERC20 `balanceOf` implementations behave according to their documented interfaces.
 - RPC, oracle, and quote sources are available and correctly configured for off-chain checks.
 
 ## Known Limitations
 
-- `executeGuarded` enforces the caller-declared floor; it does not independently derive a fair price from an oracle. A fully compromised agent key can choose an unreasonably low positive floor. Oracle deviation and floor selection therefore remain off-chain policy.
+- `executeGuarded` now binds the caller-declared floor to an owner-configured on-chain oracle (`setOracle`): the declared `minOut` must be at least the oracle-fair output minus `maxOracleDeviationBps`, so a compromised agent can no longer settle a trade far below fair value. The residual trust is that the owner configures an honest oracle and keeps it in sync; oracle integrity itself is out of scope for the vault. When no oracle is configured the vault falls back to the caller-declared floor only.
 - Legacy `execute` remains available for owner-approved non-trading setup calls. Every trading venue must also be marked `guardedTarget`.
 - Native output is supported only when the call sends zero native value, which covers token-to-MNT sells without an ambiguous balance delta.
 - Unusual fee-on-transfer, rebasing, or adversarial token balance implementations require protocol-specific review.

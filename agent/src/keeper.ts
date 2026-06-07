@@ -1,6 +1,11 @@
-import { publicClient, getOwnerWalletClient, dexAddress } from "./config.js";
+import { publicClient, getOwnerWalletClient, dexAddress, oracleAddress } from "./config.js";
 import { readPrice } from "./chain.js";
 import { DEX_ABI } from "./dex.js";
+
+const ORACLE_ABI = [
+  { type: "function", name: "setPrice", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] },
+] as const;
+const hasOracle = Boolean(oracleAddress) && oracleAddress !== "0x0000000000000000000000000000000000000000";
 
 const MIN_PRICE = 5n * 10n ** 17n; // 0.5 MNT/token floor
 const MAX_PRICE = 6n * 10n ** 18n; // 6 MNT/token ceiling
@@ -15,6 +20,16 @@ async function setPrice(next: bigint): Promise<`0x${string}`> {
     args: [next],
   });
   await publicClient.waitForTransactionReceipt({ hash });
+  // Keep the guarded-trade oracle in lockstep with the DEX so honest trades clear the on-chain floor.
+  if (hasOracle) {
+    const oracleHash = await ownerWalletClient.writeContract({
+      address: oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: "setPrice",
+      args: [next],
+    });
+    await publicClient.waitForTransactionReceipt({ hash: oracleHash });
+  }
   return hash;
 }
 
