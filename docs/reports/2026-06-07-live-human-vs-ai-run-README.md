@@ -14,6 +14,8 @@
 >
 > **P1 progress (started):** the **dynamic execution-cost gate** (`risk/costGate.ts`) and **quote-to-submit freshness guard** (`risk/freshness.ts`) are implemented as pure, tested modules and wired into the AI submit path, env-gated (`AGENT_DYNAMIC_COST_GATE`, `AGENT_MAX_BLOCK_DRIFT`, default off) so they are ready for a controlled run without changing default behavior. The cost gate blocks a trade whose expected edge can't clear observed gas+fees+slippage; the freshness guard skips submission when the pinned observation block has drifted too far behind head (the OracleFloorTooLow race in section 10). 170 agent + 40 forge green.
 >
+> **Seeded/scripted keeper (P1/P2) — DONE.** `priceSequence.ts` provides deterministic generators (mulberry32, a fixed 40-tick regime script, and a seeded walk) tested in `priceSequence.test.ts`. The keeper now supports `KEEPER_PRICE_MODE=scripted|seeded|walk` (default `walk` = unchanged). In scripted/seeded mode AI and DCA face an identical, reproducible price path across runs — the prerequisite for a trustworthy multi-seed AI-vs-DCA benchmark. 178 agent + 40 forge green.
+>
 > Remaining P1 items (explicit ensemble modes, recovery-state logic, dynamic gas cost gate, quote-to-submit freshness re-quote, and a seeded/scripted keeper to remove the `Math.random` race at its source).
 
 
