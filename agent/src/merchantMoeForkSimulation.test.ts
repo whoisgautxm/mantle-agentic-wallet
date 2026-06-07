@@ -151,6 +151,56 @@ describe("Merchant Moe fork simulation", () => {
     expect(decoded.args[3]).toBe(from);
   });
 
+  it("simulates vault swaps through executeGuarded with quote-derived output protection", async () => {
+    const simulations: any[] = [];
+    const vault = "0x5555555555555555555555555555555555555555" as const;
+    const client: ForkSimulationClient = {
+      async readContract(args) {
+        const functionName = (args as { functionName?: string }).functionName;
+        if (functionName === "balanceOf") return 2_000n;
+        if (functionName === "allowance") return 1_000n;
+        throw new Error(`unexpected readContract function ${functionName}`);
+      },
+      async call() {
+        throw new Error("direct router call is not expected in vault-execute mode");
+      },
+      async simulateContract(args) {
+        simulations.push(args);
+        return { result: "0x1234" };
+      },
+      async estimateContractGas() {
+        return 210_000n;
+      },
+    };
+
+    const report = await buildMerchantMoeForkSimulationReport(
+      await readiness({ MERCHANT_MOE_SLIPPAGE_BPS: "100" }),
+      loadMerchantMoeForkSimulationConfig({
+        MERCHANT_MOE_ENABLE_FORK_SIMULATION: "true",
+        MERCHANT_MOE_FORK_RPC_URL: "http://127.0.0.1:8545",
+        MERCHANT_MOE_SIMULATION_FROM: from,
+        MERCHANT_MOE_SIMULATION_MODE: "vault-execute",
+        MERCHANT_MOE_SIMULATION_VAULT: vault,
+      }),
+      client,
+      quote,
+    );
+
+    expect(report.ok).toBe(true);
+    expect(report.outAsset).toBe(tokenB);
+    expect(report.minOutWei).toBe("891");
+    expect(report.simulation?.gasEstimate).toBe(210_000n);
+    expect(simulations).toHaveLength(1);
+    expect(simulations[0]).toMatchObject({
+      address: vault,
+      functionName: "executeGuarded",
+      account: from,
+    });
+    expect(simulations[0].args[0]).toBe(router);
+    expect(simulations[0].args[3]).toBe(tokenB);
+    expect(simulations[0].args[4]).toBe(891n);
+  });
+
   it("blocks before router call when token-in balance is too low", async () => {
     const calls: unknown[] = [];
     const report = await buildMerchantMoeForkSimulationReport(

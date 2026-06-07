@@ -26,6 +26,16 @@ export const DEX_ABI = [
   },
 ] as const;
 
+export const ERC20_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
 export function encodeBuy(): `0x${string}` {
   return encodeFunctionData({ abi: DEX_ABI, functionName: "buy" });
 }

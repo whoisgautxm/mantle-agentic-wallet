@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {AgentVault} from "../src/AgentVault.sol";
 import {MockTarget} from "./mocks/MockTarget.sol";
 import {MockReentrant} from "./mocks/MockReentrant.sol";
+import {MockGuardedTarget} from "./mocks/MockGuardedTarget.sol";
+import {MockReentrantAgent} from "./mocks/MockReentrantAgent.sol";
 
 contract AgentVaultTest is Test {
     AgentVault vault;
@@ -139,6 +141,170 @@ contract AgentVaultTest is Test {
         // that inner revert makes the outer low-level call fail -> "call failed".
         vm.expectRevert(bytes("call failed"));
         vault.execute(address(evil), 0, abi.encodeWithSignature("attack(uint256)", 1), "trigger");
+    }
+
+    function test_executeGuarded_succeedsWhenErc20OutputMeetsMin() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+        vault.setGuardedTarget(address(guarded), true);
+        guarded.setTokenOutput(0.5 ether);
+        address outputToken = address(guarded.token());
+        bytes memory callData = abi.encodeCall(MockGuardedTarget.deliverToken, ());
+
+        vm.expectEmit(true, true, false, true);
+        emit AgentVault.AgentDecision(0, address(guarded), 0.1 ether, callData, "guarded buy");
+        vm.expectEmit(true, true, true, true);
+        emit AgentVault.AgentGuardedDecision(0, address(guarded), outputToken, 0.49 ether, 0.5 ether);
+        vm.prank(agent);
+        vault.executeGuarded(
+            address(guarded),
+            0.1 ether,
+            callData,
+            outputToken,
+            0.49 ether,
+            "guarded buy"
+        );
+
+        assertEq(guarded.token().balanceOf(address(vault)), 0.5 ether);
+        assertEq(vault.spentToday(), 0.1 ether);
+        assertEq(vault.nonce(), 1);
+    }
+
+    function test_executeGuarded_revertsWhenOutputBelowMin() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+        guarded.setTokenOutput(0.4 ether);
+        address outputToken = address(guarded.token());
+
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(AgentVault.InsufficientOutput.selector, 0.4 ether, 0.5 ether));
+        vault.executeGuarded(
+            address(guarded),
+            0.1 ether,
+            abi.encodeCall(MockGuardedTarget.deliverToken, ()),
+            outputToken,
+            0.5 ether,
+            "bad output"
+        );
+
+        assertEq(guarded.token().balanceOf(address(vault)), 0);
+        assertEq(vault.spentToday(), 0);
+        assertEq(vault.nonce(), 0);
+    }
+
+    function test_redTeam_guardedTargetCannotBypassMinOutThroughLegacyExecute() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+        vault.setGuardedTarget(address(guarded), true);
+        guarded.setTokenOutput(1);
+
+        uint256 vaultBalanceBefore = address(vault).balance;
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(AgentVault.GuardedExecutionRequired.selector, address(guarded)));
+        vault.execute(
+            address(guarded),
+            0.1 ether,
+            abi.encodeCall(MockGuardedTarget.deliverToken, ()),
+            "compromised agent tries legacy bypass"
+        );
+
+        assertEq(address(vault).balance, vaultBalanceBefore);
+        assertEq(guarded.token().balanceOf(address(vault)), 0);
+        assertEq(vault.spentToday(), 0);
+        assertEq(vault.nonce(), 0);
+    }
+
+    function test_executeGuarded_supportsNativeOutputForZeroValueCalls() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+        (bool funded,) = address(guarded).call{value: 1 ether}("");
+        require(funded, "target fund failed");
+        guarded.setNativeOutput(0.75 ether);
+        uint256 beforeBalance = address(vault).balance;
+
+        vm.prank(agent);
+        vault.executeGuarded(
+            address(guarded),
+            0,
+            abi.encodeCall(MockGuardedTarget.deliverNative, ()),
+            address(0),
+            0.7 ether,
+            "guarded sell"
+        );
+
+        assertEq(address(vault).balance, beforeBalance + 0.75 ether);
+    }
+
+    function test_executeGuarded_rejectsNativeOutputWhenSendingValue() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+
+        vm.prank(agent);
+        vm.expectRevert(AgentVault.NativeOutputWithValueUnsupported.selector);
+        vault.executeGuarded(
+            address(guarded),
+            0.1 ether,
+            abi.encodeCall(MockGuardedTarget.deliverNative, ()),
+            address(0),
+            1,
+            "ambiguous native delta"
+        );
+    }
+
+    function test_executeGuarded_rejectsZeroMinOutput() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        vault.setAllowedTarget(address(guarded), true);
+        address outputToken = address(guarded.token());
+
+        vm.prank(agent);
+        vm.expectRevert(AgentVault.ZeroMinOutput.selector);
+        vault.executeGuarded(
+            address(guarded),
+            0,
+            abi.encodeCall(MockGuardedTarget.deliverToken, ()),
+            outputToken,
+            0,
+            "unguarded output"
+        );
+    }
+
+    function test_executeGuarded_stillEnforcesVaultLimits() public {
+        MockGuardedTarget guarded = new MockGuardedTarget();
+        bytes memory callData = abi.encodeCall(MockGuardedTarget.deliverToken, ());
+        address outputToken = address(guarded.token());
+
+        vm.prank(agent);
+        vm.expectRevert(bytes("target not allowed"));
+        vault.executeGuarded(address(guarded), 0, callData, outputToken, 1, "blocked");
+
+        vault.setAllowedTarget(address(guarded), true);
+        vault.setPaused(true);
+        vm.prank(agent);
+        vm.expectRevert(bytes("paused"));
+        vault.executeGuarded(address(guarded), 0, callData, outputToken, 1, "blocked");
+
+        vault.setPaused(false);
+        vm.prank(agent);
+        vm.expectRevert(bytes("over per-tx limit"));
+        vault.executeGuarded(address(guarded), PER_TX + 1, callData, outputToken, 1, "blocked");
+
+        vault.setLimits(PER_TX, 0);
+        vm.prank(agent);
+        vm.expectRevert(bytes("over daily limit"));
+        vault.executeGuarded(address(guarded), 1, callData, outputToken, 1, "blocked");
+    }
+
+    function test_executeGuarded_reentrancyBlocked() public {
+        MockReentrantAgent evil = new MockReentrantAgent();
+        AgentVault guardedVault = new AgentVault(address(evil), PER_TX, DAILY);
+        evil.setVault(guardedVault);
+        guardedVault.setAllowedTarget(address(evil), true);
+        (bool funded,) = address(evil).call{value: 1 ether}("");
+        require(funded, "evil fund failed");
+
+        vm.expectRevert(bytes("call failed"));
+        evil.start();
+        assertEq(guardedVault.nonce(), 0);
     }
 
     receive() external payable {}

@@ -25,14 +25,17 @@ contract Deploy is Script {
         (bool okAi,) = address(aiVault).call{value: 1 ether}(""); // equal starting capital
         require(okAi, "ai seed failed");
         aiVault.setAllowedTarget(address(dex), true);
+        aiVault.setGuardedTarget(address(dex), true);
 
         AgentVault baselineVault = new AgentVault(baselineAgent, perTx, daily);
         (bool okBaseline,) = address(baselineVault).call{value: 1 ether}(""); // equal starting capital
         require(okBaseline, "baseline seed failed");
         baselineVault.setAllowedTarget(address(dex), true);
+        baselineVault.setGuardedTarget(address(dex), true);
         vm.stopBroadcast();
 
         console.log("MockDEX deployed at:", address(dex));
+        console.log("MockToken deployed at:", address(dex.token()));
         console.log("AI AgentVault deployed at:", address(aiVault));
         console.log("Baseline AgentVault deployed at:", address(baselineVault));
         console.log("AI agent address:", aiAgent);

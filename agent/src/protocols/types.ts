@@ -31,6 +31,7 @@ export interface ExecutionPlan {
   calldata: `0x${string}`;
   amountTokenWei?: bigint;
   expectedOutWei?: bigint;
+  outputAsset: `0x${string}`;
   minOutWei?: bigint;
   slippageBps?: bigint;
   deadlineSeconds?: bigint;
@@ -64,6 +65,9 @@ export function planToDecision(plan: ExecutionPlan, rationale: string): Decision
     valueWei: plan.valueWei,
     calldata: plan.calldata,
     amountTokenWei: plan.amountTokenWei,
+    outAsset: plan.outputAsset,
+    minOutWei: plan.minOutWei,
+    expectedOutWei: plan.expectedOutWei,
     rationale,
   };
 }

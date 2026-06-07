@@ -13,9 +13,12 @@ const client = createPublicClient({
 
 const DEX_ABI = [
   { type: "function", name: "price", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+] as const;
+
+const ERC20_ABI = [
   {
     type: "function",
-    name: "tokenBalance",
+    name: "balanceOf",
     stateMutability: "view",
     inputs: [{ type: "address" }],
     outputs: [{ type: "uint256" }],
@@ -30,6 +33,13 @@ const VAULT_ABI = [
   {
     type: "function",
     name: "allowedTarget",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "guardedTarget",
     stateMutability: "view",
     inputs: [{ type: "address" }],
     outputs: [{ type: "bool" }],
@@ -55,6 +65,7 @@ export interface VaultStatus {
   dailyRemaining: bigint;
   paused: boolean;
   dexAllowed: boolean;
+  dexGuarded: boolean;
 }
 
 export interface LiveStatus {
@@ -106,6 +117,7 @@ function snapshotStatus(): LiveStatus {
       dailyRemaining: dailyLimit - spentToday,
       paused: false,
       dexAllowed: true,
+      dexGuarded: true,
     };
   };
 
@@ -247,14 +259,19 @@ function deployed(address: string | undefined): address is `0x${string}` {
 
 async function readContract<T>(params: {
   address: `0x${string}`;
-  abi: typeof DEX_ABI | typeof VAULT_ABI;
+  abi: typeof DEX_ABI | typeof ERC20_ABI | typeof VAULT_ABI;
   functionName: string;
   args?: readonly unknown[];
 }): Promise<T> {
   return (await client.readContract(params as any)) as T;
 }
 
-async function readVaultStatus(vault: `0x${string}`, dex: `0x${string}`, priceWei: bigint): Promise<VaultStatus> {
+async function readVaultStatus(
+  vault: `0x${string}`,
+  dex: `0x${string}`,
+  token: `0x${string}`,
+  priceWei: bigint,
+): Promise<VaultStatus> {
   const balanceWei = await client.getBalance({ address: vault });
   const spendLimitPerTx = await readContract<bigint>({
     address: vault,
@@ -278,10 +295,16 @@ async function readVaultStatus(vault: `0x${string}`, dex: `0x${string}`, priceWe
     functionName: "allowedTarget",
     args: [dex],
   });
+  const dexGuarded = await readContract<boolean>({
+    address: vault,
+    abi: VAULT_ABI,
+    functionName: "guardedTarget",
+    args: [dex],
+  });
   const tokenBalanceWei = await readContract<bigint>({
-    address: dex,
-    abi: DEX_ABI,
-    functionName: "tokenBalance",
+    address: token,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
     args: [vault],
   });
 
@@ -302,14 +325,16 @@ async function readVaultStatus(vault: `0x${string}`, dex: `0x${string}`, priceWe
     dailyRemaining,
     paused,
     dexAllowed,
+    dexGuarded,
   };
 }
 
 export async function getLiveStatus(): Promise<StatusResult> {
   const dex = addresses.mockDex as `0x${string}`;
+  const token = (addresses as any).mockToken as `0x${string}`;
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
-  if (!deployed(dex) || !deployed(aiVault) || !deployed(baselineVault)) {
+  if (!deployed(dex) || !deployed(token) || !deployed(aiVault) || !deployed(baselineVault)) {
     return { ok: false, reason: "contracts are not deployed in web/data/addresses.json" };
   }
   if (!process.env.MANTLE_RPC_URL && (process.env.LIVE_STATUS_SOURCE ?? "snapshot").toLowerCase() !== "rpc") {
@@ -320,8 +345,8 @@ export async function getLiveStatus(): Promise<StatusResult> {
     const dexPriceWei = await readContract<bigint>({ address: dex, abi: DEX_ABI, functionName: "price" });
     const oracle = await readOracleStatus(dexPriceWei);
     const [ai, baseline] = await Promise.all([
-      readVaultStatus(aiVault, dex, oracle.priceWei),
-      readVaultStatus(baselineVault, dex, oracle.priceWei),
+      readVaultStatus(aiVault, dex, token, oracle.priceWei),
+      readVaultStatus(baselineVault, dex, token, oracle.priceWei),
     ]);
     return {
       ok: true,

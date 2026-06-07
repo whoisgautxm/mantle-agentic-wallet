@@ -5,6 +5,7 @@ import type { Decision } from "../types.js";
 const vault = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const account = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
 const target = "0xcccccccccccccccccccccccccccccccccccccccc" as const;
+const outputToken = "0xdddddddddddddddddddddddddddddddddddddddd" as const;
 
 const decision: Extract<Decision, { kind: "execute" }> = {
   kind: "execute",
@@ -12,17 +13,19 @@ const decision: Extract<Decision, { kind: "execute" }> = {
   target,
   valueWei: 123n,
   calldata: "0x12345678",
+  outAsset: outputToken,
+  minOutWei: 456n,
   rationale: "simulation test",
 };
 
 describe("simulateExecute", () => {
-  it("simulates AgentVault.execute and captures a gas estimate", async () => {
+  it("simulates AgentVault.executeGuarded and captures a gas estimate", async () => {
     const client: ExecuteSimulationClient = {
       async simulateContract(params: any) {
         expect(params.address).toBe(vault);
-        expect(params.functionName).toBe("execute");
+        expect(params.functionName).toBe("executeGuarded");
         expect(params.account).toBe(account);
-        expect(params.args).toEqual([target, 123n, "0x12345678", "simulation test"]);
+        expect(params.args).toEqual([target, 123n, "0x12345678", outputToken, 456n, "simulation test"]);
         return { result: "0x" };
       },
       async estimateContractGas(params: any) {

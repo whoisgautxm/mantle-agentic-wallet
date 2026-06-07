@@ -13,8 +13,10 @@ contract AgentVault {
     uint256 public windowStart;      // unix ts when the current window began
     bool public paused;              // owner kill switch
     uint256 public nonce;            // increments per executed decision
+    uint256 private executionLock = 1;
 
     mapping(address => bool) public allowedTarget;
+    mapping(address => bool) public guardedTarget;
 
     event AgentDecision(
         uint256 indexed nonce,
@@ -23,8 +25,16 @@ contract AgentVault {
         bytes data,
         string rationale
     );
+    event AgentGuardedDecision(
+        uint256 indexed nonce,
+        address indexed target,
+        address indexed outAsset,
+        uint256 minOut,
+        uint256 received
+    );
     event Deposited(address indexed from, uint256 amount);
     event TargetAllowed(address indexed target, bool allowed);
+    event GuardedTargetSet(address indexed target, bool required);
     event PausedSet(bool paused);
     event AgentSet(address indexed agent);
     event LimitsSet(uint256 spendLimitPerTx, uint256 dailyLimit);
@@ -32,6 +42,12 @@ contract AgentVault {
     error NotOwner();
     error NotAgent();
     error ZeroAddress();
+    error ZeroMinOutput();
+    error InsufficientOutput(uint256 received, uint256 minOut);
+    error NativeOutputWithValueUnsupported();
+    error AssetBalanceReadFailed(address asset);
+    error GuardedExecutionRequired(address target);
+    error Reentrancy();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -40,6 +56,12 @@ contract AgentVault {
     modifier onlyAgent() {
         if (msg.sender != agent) revert NotAgent();
         _;
+    }
+    modifier nonReentrant() {
+        if (executionLock != 1) revert Reentrancy();
+        executionLock = 2;
+        _;
+        executionLock = 1;
     }
 
     constructor(address _agent, uint256 _spendLimitPerTx, uint256 _dailyLimit) {
@@ -58,6 +80,11 @@ contract AgentVault {
     function setAllowedTarget(address t, bool ok) external onlyOwner {
         allowedTarget[t] = ok;
         emit TargetAllowed(t, ok);
+    }
+
+    function setGuardedTarget(address target, bool required) external onlyOwner {
+        guardedTarget[target] = required;
+        emit GuardedTargetSet(target, required);
     }
 
     function setPaused(bool p) external onlyOwner {
@@ -86,15 +113,11 @@ contract AgentVault {
     function execute(address target, uint256 value, bytes calldata data, string calldata rationale)
         external
         onlyAgent
+        nonReentrant
         returns (bytes memory)
     {
-        require(!paused, "paused");
-        require(allowedTarget[target], "target not allowed");
-        require(value <= spendLimitPerTx, "over per-tx limit");
-
-        _rollWindow();
-        require(spentToday + value <= dailyLimit, "over daily limit");
-        spentToday += value;
+        if (guardedTarget[target]) revert GuardedExecutionRequired(target);
+        _validateAndAccount(target, value);
 
         emit AgentDecision(nonce, target, value, data, rationale);
         nonce += 1;
@@ -102,6 +125,50 @@ contract AgentVault {
         (bool success, bytes memory ret) = target.call{value: value}(data);
         require(success, "call failed");
         return ret;
+    }
+
+    /// @notice Execute an allowlisted call and require a minimum received asset balance delta.
+    /// @dev Native output is supported only when value is zero, which covers token-to-MNT sells.
+    function executeGuarded(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        address outAsset,
+        uint256 minOut,
+        string calldata rationale
+    ) external onlyAgent nonReentrant returns (bytes memory) {
+        if (minOut == 0) revert ZeroMinOutput();
+        if (outAsset == address(0) && value != 0) revert NativeOutputWithValueUnsupported();
+        _validateAndAccount(target, value);
+
+        uint256 beforeBalance = _assetBalance(outAsset);
+        (bool success, bytes memory ret) = target.call{value: value}(data);
+        require(success, "call failed");
+        uint256 afterBalance = _assetBalance(outAsset);
+        uint256 received = afterBalance > beforeBalance ? afterBalance - beforeBalance : 0;
+        if (received < minOut) revert InsufficientOutput(received, minOut);
+
+        emit AgentDecision(nonce, target, value, data, rationale);
+        emit AgentGuardedDecision(nonce, target, outAsset, minOut, received);
+        nonce += 1;
+        return ret;
+    }
+
+    function _validateAndAccount(address target, uint256 value) internal {
+        require(!paused, "paused");
+        require(allowedTarget[target], "target not allowed");
+        require(value <= spendLimitPerTx, "over per-tx limit");
+        _rollWindow();
+        require(spentToday + value <= dailyLimit, "over daily limit");
+        spentToday += value;
+    }
+
+    function _assetBalance(address asset) internal view returns (uint256) {
+        if (asset == address(0)) return address(this).balance;
+        (bool success, bytes memory result) =
+            asset.staticcall(abi.encodeWithSignature("balanceOf(address)", address(this)));
+        if (!success || result.length < 32) revert AssetBalanceReadFailed(asset);
+        return abi.decode(result, (uint256));
     }
 
     function _rollWindow() internal {

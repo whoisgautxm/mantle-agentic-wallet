@@ -19,6 +19,9 @@ export type Decision =
       rationale: string;
       action?: "pay" | "buy" | "sell";
       amountTokenWei?: bigint;
+      outAsset?: `0x${string}`;
+      minOutWei?: bigint;
+      expectedOutWei?: bigint;
       analysis?: DecisionAnalysis;
     };
 

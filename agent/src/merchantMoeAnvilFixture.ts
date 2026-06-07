@@ -80,12 +80,36 @@ const AGENT_VAULT_ABI = [
   },
   {
     type: "function",
+    name: "setGuardedTarget",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "target", type: "address" },
+      { name: "required", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "execute",
     stateMutability: "nonpayable",
     inputs: [
       { name: "target", type: "address" },
       { name: "value", type: "uint256" },
       { name: "data", type: "bytes" },
+      { name: "rationale", type: "string" },
+    ],
+    outputs: [{ name: "", type: "bytes" }],
+  },
+  {
+    type: "function",
+    name: "executeGuarded",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "target", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+      { name: "outAsset", type: "address" },
+      { name: "minOut", type: "uint256" },
       { name: "rationale", type: "string" },
     ],
     outputs: [{ name: "", type: "bytes" }],
@@ -102,6 +126,13 @@ const AGENT_VAULT_ABI = [
   {
     type: "function",
     name: "allowedTarget",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "guardedTarget",
     stateMutability: "view",
     inputs: [{ type: "address" }],
     outputs: [{ type: "bool" }],
@@ -408,6 +439,24 @@ export async function setVaultTarget(
   });
 }
 
+export async function setVaultGuardedTarget(
+  url: string,
+  owner: `0x${string}`,
+  vault: `0x${string}`,
+  target: `0x${string}`,
+  required = true,
+): Promise<`0x${string}`> {
+  return sendUnlockedTransaction(url, {
+    from: owner,
+    to: vault,
+    data: encodeFunctionData({
+      abi: AGENT_VAULT_ABI,
+      functionName: "setGuardedTarget",
+      args: [target, required],
+    }),
+  });
+}
+
 export async function setVaultPaused(
   url: string,
   owner: `0x${string}`,
@@ -445,18 +494,41 @@ export async function executeThroughVault(
   });
 }
 
+export async function executeGuardedThroughVault(
+  url: string,
+  agent: `0x${string}`,
+  vault: `0x${string}`,
+  target: `0x${string}`,
+  value: bigint,
+  data: `0x${string}`,
+  outAsset: `0x${string}`,
+  minOut: bigint,
+  rationale: string,
+): Promise<SubmittedTransaction> {
+  return submitUnlockedTransaction(url, {
+    from: agent,
+    to: vault,
+    data: encodeFunctionData({
+      abi: AGENT_VAULT_ABI,
+      functionName: "executeGuarded",
+      args: [target, value, data, outAsset, minOut, rationale],
+    }),
+  });
+}
+
 export async function readVaultEvidence(
   client: ReturnType<typeof createPublicClient>,
   vault: `0x${string}`,
   token: `0x${string}`,
   router: `0x${string}`,
 ): Promise<MerchantMoeVaultEvidence> {
-  const [agent, paused, tokenAllowed, routerAllowed, spendLimitPerTx, dailyLimit, spentToday, nonce] =
+  const [agent, paused, tokenAllowed, routerAllowed, routerGuarded, spendLimitPerTx, dailyLimit, spentToday, nonce] =
     await Promise.all([
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "agent" }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "paused" }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "allowedTarget", args: [token] }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "allowedTarget", args: [router] }),
+      client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "guardedTarget", args: [router] }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "spendLimitPerTx" }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "dailyLimit" }),
       client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "spentToday" }),
@@ -468,6 +540,7 @@ export async function readVaultEvidence(
     paused: paused as boolean,
     tokenAllowed: tokenAllowed as boolean,
     routerAllowed: routerAllowed as boolean,
+    routerGuarded: routerGuarded as boolean,
     spendLimitPerTx: (spendLimitPerTx as bigint).toString(),
     dailyLimit: (dailyLimit as bigint).toString(),
     spentToday: (spentToday as bigint).toString(),
@@ -505,13 +578,15 @@ async function executeForkSwap(
     client.readContract({ address: vault, abi: AGENT_VAULT_ABI, functionName: "nonce" }) as Promise<bigint>,
   ]);
   try {
-    const transaction = await executeThroughVault(
+    const transaction = await executeGuardedThroughVault(
       url,
       account,
       vault,
       router,
       0n,
       calldata,
+      tokenOut,
+      minOut,
       "Merchant Moe fork-only guarded swap",
     );
     const [tokenInAfter, tokenOutAfter, nonceAfter] = await Promise.all([
@@ -544,7 +619,7 @@ async function executeForkSwap(
       nonceBefore: nonceBefore.toString(),
       nonceAfter: nonceAfter.toString(),
       reason: passed
-        ? "fork-only AgentVault.execute swap changed balances, met minOut, and emitted one AgentDecision"
+        ? "fork-only AgentVault.executeGuarded swap changed balances, met minOut, and emitted one AgentDecision"
         : "fork-only swap receipt did not satisfy balance, minOut, nonce, or AgentDecision assertions",
     };
   } catch (error) {
@@ -624,6 +699,12 @@ export async function runMerchantMoeAnvilFixture(
       MERCHANT_MOE_TOKENS.WMNT.address,
     );
     const routerAllowHash = await setVaultTarget(
+      url,
+      account,
+      deployment.address,
+      MERCHANT_MOE_MANTLE.lbRouter,
+    );
+    const routerGuardHash = await setVaultGuardedTarget(
       url,
       account,
       deployment.address,
@@ -723,6 +804,7 @@ export async function runMerchantMoeAnvilFixture(
         deployment.hash,
         tokenAllowHash,
         routerAllowHash,
+        routerGuardHash,
         fundingHash,
         wrapTransaction.hash,
         approvalTransaction.hash,

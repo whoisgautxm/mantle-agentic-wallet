@@ -86,7 +86,12 @@ function allowanceItem(portfolio: PortfolioStatus): ProtocolReadinessItem {
 
 export function getProtocolReadiness(status: StatusResult, portfolio: PortfolioStatus): ProtocolReadiness {
   const dex = addresses.mockDex as string | undefined;
-  const mockDexReady = status.ok && status.risk.ai.dexAllowed && status.risk.baseline.dexAllowed;
+  const mockDexReady =
+    status.ok &&
+    status.risk.ai.dexAllowed &&
+    status.risk.ai.dexGuarded &&
+    status.risk.baseline.dexAllowed &&
+    status.risk.baseline.dexGuarded;
   const merchantMoeConfigured = hasEnv("MERCHANT_MOE_LB_QUOTER") && hasEnv("MERCHANT_MOE_LB_ROUTER");
   const merchantMoeSpenderConfigured =
     process.env.PORTFOLIO_SPENDERS?.toLowerCase().includes("merchantmoelbrouter") ?? false;
@@ -99,7 +104,7 @@ export function getProtocolReadiness(status: StatusResult, portfolio: PortfolioS
         status: mockDexReady ? "ok" : "bad",
         label: mockDexReady ? "Executable" : "Blocked",
         detail: status.ok
-          ? "AI and baseline vaults both allowlist the active demo DEX."
+          ? "AI and baseline vaults both allowlist the DEX and require guarded execution."
           : "Waiting for live vault allowlist reads.",
         target: short(dex),
       },
@@ -121,7 +126,7 @@ export function getProtocolReadiness(status: StatusResult, portfolio: PortfolioS
         mode: "execution preflight",
         status: "ok",
         label: "Enabled",
-        detail: "submitExecute requires a passing AgentVault.execute simulation before writeContract.",
+        detail: "submitExecute requires a passing AgentVault.executeGuarded simulation before writeContract.",
       },
       allowanceItem(portfolio),
     ],

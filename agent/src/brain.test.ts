@@ -5,6 +5,7 @@ import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import type { VaultState } from "./types.js";
 
 const DEX = "0x3333333333333333333333333333333333333333" as const;
+const TOKEN = "0x4444444444444444444444444444444444444444" as const;
 const state: VaultState = {
   balanceWei: 1n * 10n ** 18n,
   spendLimitPerTx: 1n * 10n ** 17n,
@@ -18,7 +19,7 @@ const state: VaultState = {
 
 describe("tool-use parsing", () => {
   it("maps a buy tool call to intent, then lets the adapter build the execute Decision", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const intent = parseToolUseIntent({ action: "buy", amountMnt: "0.01", rationale: "price dipped" });
     const d = await buildDecisionFromToolUse({ action: "buy", amountMnt: "0.01", rationale: "price dipped" }, adapter);
 
@@ -29,12 +30,14 @@ describe("tool-use parsing", () => {
       expect(d.target).toBe(DEX);
       expect(d.valueWei).toBe(10_000_000_000_000_000n);
       expect(d.calldata.startsWith("0x")).toBe(true);
+      expect(d.outAsset).toBe(TOKEN);
+      expect(d.minOutWei).toBeGreaterThan(0n);
       expect(d.rationale).toBe("price dipped");
     }
   });
 
   it("maps a sell tool call to a zero-value execute Decision with token amount metadata", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const d = await buildDecisionFromToolUse({ action: "sell", amountToken: "0.5", rationale: "take profit" }, adapter);
 
     expect(d.kind).toBe("execute");
@@ -44,6 +47,8 @@ describe("tool-use parsing", () => {
       expect(d.valueWei).toBe(0n);
       expect(d.amountTokenWei).toBe(500_000_000_000_000_000n);
       expect(d.calldata.startsWith("0x")).toBe(true);
+      expect(d.outAsset).toBe("0x0000000000000000000000000000000000000000");
+      expect(d.minOutWei).toBeGreaterThan(0n);
     }
   });
 
@@ -64,7 +69,7 @@ describe("tool-use parsing", () => {
   });
 
   it("caps human-unit sell proposals to 60% of available token inventory", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const decision = await buildDecisionFromToolUse(
       { action: "sell", amountToken: "500000000000000000", rationale: "take profit" },
       adapter,
@@ -101,7 +106,7 @@ describe("tool-use parsing", () => {
   });
 
   it("changes low-confidence model trades to holds before quoting", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const decision = await buildDecisionFromToolUse(
       {
         regime: "range",
@@ -126,7 +131,7 @@ describe("tool-use parsing", () => {
   });
 
   it("requires expected edge to exceed estimated execution costs", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const decision = await buildDecisionFromToolUse(
       {
         regime: "range",
@@ -149,7 +154,7 @@ describe("tool-use parsing", () => {
   });
 
   it("caps dip buying to 15% of capacity during a deterministic downtrend", async () => {
-    const adapter = createMockDexAdapter(DEX, async () => 2n * 10n ** 18n);
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
     const features = computeMarketFeatures([
       24n * 10n ** 17n,
       22n * 10n ** 17n,

@@ -15,6 +15,7 @@ import type { RiskResult } from "./risk/types.js";
 import type { Decision, DecisionAnalysis, VaultState } from "./types.js";
 
 const DEX = "0x1111111111111111111111111111111111111111" as const;
+const TOKEN = "0x2222222222222222222222222222222222222222" as const;
 const ONE = 10n ** 18n;
 const BPS = 10_000n;
 const MAX_HISTORY = 12;
@@ -519,7 +520,7 @@ async function runRegime(
   decisionRunner: BenchmarkDecisionRunner,
 ): Promise<BenchmarkRegimeResult> {
   let currentPrice = regime.pricesWei[0];
-  const adapter = createMockDexAdapter(DEX, async () => currentPrice);
+  const adapter = createMockDexAdapter(DEX, TOKEN, async () => currentPrice);
   const ai = createAccount(fixture, currentPrice);
   const comparatorAccounts = Object.fromEntries(
     COMPARATOR_NAMES.map((name) => [name, createAccount(fixture, currentPrice)]),

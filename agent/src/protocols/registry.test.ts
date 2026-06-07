@@ -4,10 +4,11 @@ import { createProtocolRegistry } from "./registry.js";
 import type { ReadOnlyProtocolAdapter } from "./types.js";
 
 const dex = "0x3333333333333333333333333333333333333333" as const;
+const token = "0x4444444444444444444444444444444444444444" as const;
 
 describe("ProtocolRegistry", () => {
   it("returns executable adapters and their guard metadata", () => {
-    const adapter = createMockDexAdapter(dex, async () => 1n);
+    const adapter = createMockDexAdapter(dex, token, async () => 1n);
     const registry = createProtocolRegistry([adapter]);
 
     expect(registry.requireExecutable("mockdex")).toBe(adapter);
@@ -17,8 +18,8 @@ describe("ProtocolRegistry", () => {
   });
 
   it("rejects duplicate adapter ids", () => {
-    const first = createMockDexAdapter(dex, async () => 1n);
-    const second = createMockDexAdapter(dex, async () => 1n);
+    const first = createMockDexAdapter(dex, token, async () => 1n);
+    const second = createMockDexAdapter(dex, token, async () => 1n);
 
     expect(() => createProtocolRegistry([first, second])).toThrow(/already registered/);
   });

@@ -1,4 +1,4 @@
-import { VAULT_ABI } from "../vault.js";
+import { buildVaultExecutionCall, VAULT_ABI } from "../vault.js";
 import type { Decision } from "../types.js";
 import type { SimulationResult } from "./types.js";
 
@@ -35,15 +35,15 @@ export async function simulateExecute(
   options: SimulateExecuteOptions = {},
 ): Promise<SimulationResult> {
   const client = options.client ?? (await defaultPublicClient());
-  const call = {
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "execute",
-    account,
-    args: [decision.target, decision.valueWei, decision.calldata, decision.rationale],
-  };
-
   try {
+    const execution = buildVaultExecutionCall(decision);
+    const call = {
+      address: vault,
+      abi: VAULT_ABI,
+      functionName: execution.functionName,
+      account,
+      args: execution.args,
+    };
     const result = await client.simulateContract(call);
     const warnings: string[] = [];
     let gasEstimate: bigint | undefined;

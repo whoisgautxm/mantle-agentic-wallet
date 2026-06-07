@@ -6,8 +6,8 @@
 **Network:** Mantle Sepolia (`chainId` `5003`)  
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
-![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-148%2F148-brightgreen)
+![Contracts](https://img.shields.io/badge/forge%20tests-34%2F34-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-149%2F149-brightgreen)
 ![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -18,12 +18,14 @@
 | Link | URL |
 |---|---|
 | Live dashboard | https://web-chi-sooty-61.vercel.app |
-| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x2D43BAaFb26C3be88dd5B9375eece3f18fbBb8cc |
-| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xd608208F805293A209Bb4f80eA56e499d3e0e8e1 |
-| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x8997b913132fCd0d3345C05971fe229104bd2B66 |
-| Demo decision tx | https://explorer.sepolia.mantle.xyz/tx/0x81dab78a345381f7b9ad1b4baa2a6115b4701146ad890fa5f56730af43786e9d |
+| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x812C4527fc9cF333208a4090972008a3D5F3d582 |
+| MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0x4c3Ab50fD2e65e3A7137652C375BC5750e24d8c4 |
+| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xd9a13ee193b04AD3Eb61Cf76B7d6Ea1A9950726c |
+| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xD78618596eb75c10CD575B2Edf94305B100E2968 |
+| Guarded execution tx | https://explorer.sepolia.mantle.xyz/tx/0xa85b0591c8796d21e36a6a2dc2b27899c7e7b88841acee0dbfbb488692d0ab27 |
 | GitHub | https://github.com/whoisgautxm/mantle-agentic-wallet |
 | Submission report | [docs/reports/2026-06-07-submission-readiness-report.md](docs/reports/2026-06-07-submission-readiness-report.md) |
+| Security model | [SECURITY.md](SECURITY.md) |
 
 ---
 
@@ -45,8 +47,8 @@ The OpenAI replay judge scored the run **82/100** with **88 safety**, selected t
 
 Real-protocol evidence was also verified on disposable Mantle mainnet forks:
 
-- Merchant Moe WMNT -> USDC passed quote, bounded allowance, simulation, `AgentVault.execute`, output-delta, nonce, and `AgentDecision` checks at fork block `96329880`.
-- The adversarial fork suite passed `5/5` at block `96329905`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stopped before unsafe swap submission.
+- Merchant Moe WMNT -> USDC passed quote, bounded allowance, guard-required router, simulation, `AgentVault.executeGuarded`, output-delta, nonce, and `AgentDecision` checks at fork block `96340798`.
+- The adversarial fork suite passed `5/5` at block `96340791`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stopped before unsafe swap submission.
 - Live Mantle mainnet execution remains deliberately disabled. The production-shaped path is proven on a fork without exposing real funds.
 
 ### Multi-Regime Generalization Check
@@ -113,7 +115,7 @@ The long-term direction is a Turing Test for DeFi agents: can an AI wallet outpe
                     \                                         /
                      \                                       /
                       v                                     v
-                    MockDEX - internal token ledger + owner-set price
+                    MockDEX + ERC20 MockToken + owner-set price
                     emits PriceSet, Bought, Sold
                                      |
                                      v
@@ -128,8 +130,8 @@ The long-term direction is a Turing Test for DeFi agents: can an AI wallet outpe
 3. **AI decides** - the configured provider must call `propose_action` with `buy`, `sell`, or `hold`.
 4. **Code encodes** - `agent/src/dex.ts` builds `buy()` or `sell(uint256)` calldata; the LLM never writes raw calldata.
 5. **Policy guards** - client-side checks mirror per-tx, daily-window, pause, balance, allowlist, and sell-token limits.
-6. **Simulation preflights** - viem simulates `AgentVault.execute(...)` and blocks failed calls before `writeContract`.
-7. **Vault executes** - `AgentVault.execute(...)` enforces hard on-chain limits and emits `AgentDecision`.
+6. **Simulation preflights** - viem simulates the same guarded vault call and blocks failed calls before `writeContract`.
+7. **Vault executes** - swaps use `AgentVault.executeGuarded(...)`, enforcing limits plus ERC20/native output balance deltas before emitting evidence.
 8. **Dashboard replays** - Next.js reads `AgentDecision`, `PriceSet`, `Bought`, and `Sold` logs.
 
 ---
@@ -140,8 +142,10 @@ The long-term direction is a Turing Test for DeFi agents: can an AI wallet outpe
 |---|---|---|
 | Agent-only execution | `onlyAgent` | Human owner delegates execution to scoped agent keys |
 | Target allowlist | `allowedTarget[target]` | Agent can only call approved venues |
+| Guard-required targets | `guardedTarget[target]` | Trading venues cannot bypass `executeGuarded` through legacy execution |
 | Per-transaction limit | `value <= spendLimitPerTx` | Caps each buy/action |
 | Rolling 24h daily limit | `spentToday + value <= dailyLimit` | Caps outflow and resets after 24h |
+| Minimum output delta | `executeGuarded` | Reverts when the declared ERC20/native output floor is not received |
 | Pause switch | `setPaused(true)` | Owner can immediately stop execution |
 | Agent rotation | `setAgent(newAgent)` | Owner can rotate compromised session keys |
 | Owner withdrawal | `withdraw(amount)` | Human owner can recover funds |
@@ -151,7 +155,7 @@ The long-term direction is a Turing Test for DeFi agents: can an AI wallet outpe
 | Drawdown soft breaker | `agent/src/agent.ts` | AI stops trading if portfolio value drops 15% from observed peak |
 | Optional Telegram alerts | `agent/src/telegram.ts` | Sends hold/trade notifications when env vars are configured |
 
-`AgentVault` is the source of truth. The TypeScript policy is just a preflight to avoid doomed transactions.
+`AgentVault` is the source of truth for authorization, venue routing, value limits, and the declared output floor. Oracle-derived floor selection, quote deviation, position limits, and simulation remain off-chain preflights; [SECURITY.md](SECURITY.md) documents the trust boundary and residual risks.
 
 ---
 
@@ -187,7 +191,8 @@ Together, these events form a replayable benchmark: what the agent saw, what it 
 .
 ├── contracts/
 │   ├── src/AgentVault.sol        # guarded agent wallet
-│   ├── src/MockDEX.sol           # internal-ledger trading venue
+│   ├── src/MockDEX.sol           # executable demo trading venue
+│   ├── src/MockToken.sol         # ERC20 output asset for guarded settlement
 │   ├── src/PaymentSink.sol       # legacy simple-payment demo target
 │   ├── test/AgentVault.t.sol
 │   ├── test/MockDEX.t.sol
@@ -360,7 +365,7 @@ set -a && source ../.env && set +a
 npm run simulate:merchant-moe-fork
 ```
 
-The simulation command reuses the Merchant Moe quote/readiness path, then checks whether fork simulation can run. Set `MANTLE_MAINNET_FORK_RPC_URL` or `MERCHANT_MOE_FORK_RPC_URL`, `MERCHANT_MOE_ENABLE_FORK_SIMULATION=true`, and `MERCHANT_MOE_SIMULATION_FROM` to attempt a fork-only call. If `MERCHANT_MOE_SWAP_CALLDATA` is blank, the command builds simulation-only LBRouter calldata from the quote route, bin steps, versions, minOut, recipient, and deadline. Before router simulation, it reads token-in `balanceOf` and LBRouter `allowance`; insufficient balance or allowance blocks the call with explicit preflight findings. `MERCHANT_MOE_SWAP_CALLDATA` remains available as an explicit fixture override. `MERCHANT_MOE_SIMULATION_MODE=router-call` simulates a direct LBRouter call; `vault-execute` simulates `AgentVault.execute` on a fork where `MERCHANT_MOE_SIMULATION_VAULT` exists. The command writes `merchant_moe.fork_simulation` JSONL evidence and never submits a transaction.
+The simulation command reuses the Merchant Moe quote/readiness path, then checks whether fork simulation can run. Set `MANTLE_MAINNET_FORK_RPC_URL` or `MERCHANT_MOE_FORK_RPC_URL`, `MERCHANT_MOE_ENABLE_FORK_SIMULATION=true`, and `MERCHANT_MOE_SIMULATION_FROM` to attempt a fork-only call. If `MERCHANT_MOE_SWAP_CALLDATA` is blank, the command builds simulation-only LBRouter calldata from the quote route, bin steps, versions, minOut, recipient, and deadline. Before router simulation, it reads token-in `balanceOf` and LBRouter `allowance`; insufficient balance or allowance blocks the call with explicit preflight findings. `MERCHANT_MOE_SWAP_CALLDATA` remains available as an explicit fixture override. `MERCHANT_MOE_SIMULATION_MODE=router-call` simulates a direct LBRouter call; `vault-execute` simulates `AgentVault.executeGuarded` with the quoted output token and minimum output on a fork where `MERCHANT_MOE_SIMULATION_VAULT` exists. The command writes `merchant_moe.fork_simulation` JSONL evidence and never submits a transaction.
 
 To prove the full gate can pass without live funds, run the controlled fixture:
 
@@ -379,7 +384,7 @@ set -a && source ../.env && set +a
 npm run simulate:merchant-moe-anvil
 ```
 
-This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, compiles and deploys the real project `AgentVault`, and configures its target allowlist. The vault wraps fork-only MNT, grants an exact bounded WMNT approval, simulates `AgentVault.execute` against Merchant Moe, then executes one swap only on the disposable fork. The report verifies output balance delta, vault nonce, gas, and the emitted `AgentDecision` event. It records the fork block and setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
+This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, compiles and deploys the real project `AgentVault`, and configures its target allowlist. The vault wraps fork-only MNT, grants an exact bounded WMNT approval, simulates `AgentVault.executeGuarded` against Merchant Moe, then executes one guarded swap only on the disposable fork. The report verifies output balance delta, vault nonce, gas, and the emitted `AgentDecision` event. It records the fork block and setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
 
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 
@@ -502,9 +507,10 @@ forge script script/Deploy.s.sol:Deploy --rpc-url "$MANTLE_RPC_URL" --broadcast
 The script deploys:
 
 - `MockDEX`
+- ERC20 `MockToken` controlled by `MockDEX`
 - AI `AgentVault`
 - baseline `AgentVault`
-- allowlists `MockDEX` in both vaults
+- allowlists `MockDEX` and marks it guard-required in both vaults
 - seeds DEX liquidity and vault balances
 
 Copy the printed values into `shared/addresses.json`:
@@ -515,6 +521,7 @@ Copy the printed values into `shared/addresses.json`:
   "agentVault": "0x...",
   "paymentSink": "0x0000000000000000000000000000000000000000",
   "mockDex": "0x...",
+  "mockToken": "0x...",
   "aiVault": "0x...",
   "baselineVault": "0x...",
   "deployBlock": 12345678

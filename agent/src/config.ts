@@ -14,6 +14,7 @@ export const chain = mantleSepoliaTestnet;
 export const aiVaultAddress = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
 export const baselineVaultAddress = (addresses as any).baselineVault as `0x${string}`;
 export const dexAddress = (addresses as any).mockDex as `0x${string}`;
+export const mockTokenAddress = (addresses as any).mockToken as `0x${string}`;
 export const vaultAddress = aiVaultAddress;
 
 export const agentAccount = privateKeyToAccount(env("AGENT_PRIVATE_KEY") as `0x${string}`);

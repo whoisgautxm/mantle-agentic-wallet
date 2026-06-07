@@ -4,6 +4,7 @@ import type { Decision } from "./types.js";
 const vault = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const account = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
 const target = "0xcccccccccccccccccccccccccccccccccccccccc" as const;
+const outputToken = "0xdddddddddddddddddddddddddddddddddddddddd" as const;
 const hash = `0x${"1".repeat(64)}` as const;
 let submitExecute: typeof import("./chain.js").submitExecute;
 
@@ -13,6 +14,8 @@ const decision: Extract<Decision, { kind: "execute" }> = {
   target,
   valueWei: 1n,
   calldata: "0x12345678",
+  outAsset: outputToken,
+  minOutWei: 2n,
   rationale: "submit simulation test",
 };
 
@@ -47,6 +50,12 @@ describe("submitExecute", () => {
     expect(result).toBe(hash);
     expect(simulator).toHaveBeenCalledWith(vault, decision, account, { client: undefined });
     expect(writeContract).toHaveBeenCalledOnce();
+    expect(writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "executeGuarded",
+        args: [target, 1n, "0x12345678", outputToken, 2n, "submit simulation test"],
+      }),
+    );
     expect(waitForTransactionReceipt).toHaveBeenCalledWith(hash);
   });
 });

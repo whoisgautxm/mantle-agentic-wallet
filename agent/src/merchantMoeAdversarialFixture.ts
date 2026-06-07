@@ -19,6 +19,7 @@ import {
   localRpcUrl,
   quoteConfig,
   sendUnlockedTransaction,
+  setVaultGuardedTarget,
   setVaultPaused,
   setVaultTarget,
   stopAnvil,
@@ -131,6 +132,12 @@ async function prepareVault(
   const deployment = await deployAgentVault(url, account, bytecode, amountIn);
   const tokenAllowHash = await setVaultTarget(url, account, deployment.address, MERCHANT_MOE_TOKENS.WMNT.address);
   const routerAllowHash = await setVaultTarget(url, account, deployment.address, MERCHANT_MOE_MANTLE.lbRouter);
+  const routerGuardHash = await setVaultGuardedTarget(
+    url,
+    account,
+    deployment.address,
+    MERCHANT_MOE_MANTLE.lbRouter,
+  );
   const fundingHash = await sendUnlockedTransaction(url, {
     from: account,
     to: deployment.address,
@@ -166,6 +173,7 @@ async function prepareVault(
       deployment.hash,
       tokenAllowHash,
       routerAllowHash,
+      routerGuardHash,
       fundingHash,
       wrapTransaction.hash,
       approvalTransaction.hash,

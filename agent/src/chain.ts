@@ -1,8 +1,8 @@
-import { publicClient, walletClient, aiVaultAddress, dexAddress } from "./config.js";
-import { DEX_ABI } from "./dex.js";
+import { publicClient, walletClient, aiVaultAddress, dexAddress, mockTokenAddress } from "./config.js";
+import { DEX_ABI, ERC20_ABI } from "./dex.js";
 import { assertSimulationSucceeded, simulateExecute, type ExecuteSimulationClient } from "./simulation/simulator.js";
 import type { Decision, VaultState } from "./types.js";
-import { VAULT_ABI } from "./vault.js";
+import { buildVaultExecutionCall, VAULT_ABI } from "./vault.js";
 import type { SimulationResult } from "./simulation/types.js";
 
 export { VAULT_ABI };
@@ -88,7 +88,7 @@ export async function readVaultState(vault: `0x${string}` = aiVaultAddress): Pro
     publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: "paused" }),
   );
   const tokenBalanceWei = await retryRead("tokenBalance", () =>
-    publicClient.readContract({ address: dexAddress, abi: DEX_ABI, functionName: "tokenBalance", args: [vault] }),
+    publicClient.readContract({ address: mockTokenAddress, abi: ERC20_ABI, functionName: "balanceOf", args: [vault] }),
   );
   const priceWei = await readPrice();
 
@@ -119,11 +119,12 @@ export async function submitExecute(
 
   assertSimulationSucceeded(preflight);
 
+  const execution = buildVaultExecutionCall(d);
   const hash = await client.writeContract({
     address: vault,
     abi: VAULT_ABI,
-    functionName: "execute",
-    args: [d.target, d.valueWei, d.calldata, d.rationale],
+    functionName: execution.functionName,
+    args: execution.args,
   });
   const waitForTransactionReceipt =
     options.waitForTransactionReceipt ?? ((txHash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash: txHash }));

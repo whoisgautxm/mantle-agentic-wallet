@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
 import { decide, type ReasoningClient, type ReasoningProvider } from "./brain.js";
-import { chain, aiVaultAddress, dexAddress, agentAccount } from "./config.js";
+import { chain, aiVaultAddress, dexAddress, agentAccount, mockTokenAddress } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
@@ -26,7 +26,7 @@ function createReasoningClient(): ReasoningClient {
 }
 
 const client = createReasoningClient();
-const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
+const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, mockTokenAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();

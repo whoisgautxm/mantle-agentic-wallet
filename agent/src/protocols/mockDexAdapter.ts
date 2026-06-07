@@ -4,9 +4,11 @@ import type { ProtocolAdapter, QuoteResult, TradeIntent } from "./types.js";
 
 const BUY_SELECTOR = encodeBuy().slice(0, 10) as `0x${string}`;
 const SELL_SELECTOR = encodeSell(1n).slice(0, 10) as `0x${string}`;
+const NATIVE_ASSET = "0x0000000000000000000000000000000000000000" as const;
 
 export function createMockDexAdapter(
   target: `0x${string}`,
+  token: `0x${string}`,
   readPrice: () => Promise<bigint>,
   protection: ExecutionProtectionConfig = loadExecutionProtectionFromEnv(),
 ): ProtocolAdapter {
@@ -37,6 +39,7 @@ export function createMockDexAdapter(
           target,
           valueWei,
           calldata: encodeBuy(),
+          outputAsset: token,
           expectedOutWei: quote.expectedTokenWei,
           ...executionProtection,
           summary: `MockDEX buy with ${valueWei} wei MNT`,
@@ -51,6 +54,7 @@ export function createMockDexAdapter(
         target,
         valueWei: 0n,
         calldata: encodeSell(amountTokenWei),
+        outputAsset: NATIVE_ASSET,
         amountTokenWei,
         expectedOutWei: quote.expectedMntWei,
         ...executionProtection,

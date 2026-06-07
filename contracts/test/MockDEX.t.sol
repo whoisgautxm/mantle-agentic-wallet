@@ -20,6 +20,7 @@ contract MockDEXTest is Test {
     function test_buyCreditsTokensAtPrice() public {
         vm.prank(user);
         dex.buy{value: 1 ether}();
+        assertEq(dex.token().balanceOf(user), 0.5 ether);
         assertEq(dex.tokenBalance(user), 0.5 ether);
     }
 
@@ -31,7 +32,7 @@ contract MockDEXTest is Test {
         vm.prank(user);
         dex.sell(1 ether);
 
-        assertEq(dex.tokenBalance(user), 0);
+        assertEq(dex.token().balanceOf(user), 0);
         assertEq(user.balance, beforeBalance + 2 ether);
     }
 
@@ -87,7 +88,7 @@ contract MockDEXTest is Test {
         dex.setPrice(4 ether);
         vm.prank(user);
         dex.buy{value: 4 ether}();
-        assertEq(dex.tokenBalance(user), 1 ether);
+        assertEq(dex.token().balanceOf(user), 1 ether);
     }
 
     function test_constructorRejectsZeroPrice() public {

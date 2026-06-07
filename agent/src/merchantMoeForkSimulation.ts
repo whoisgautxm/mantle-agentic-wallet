@@ -42,6 +42,8 @@ export interface MerchantMoeForkSimulationConfig {
   calldataSource: MerchantMoeForkSimulationCalldataSource;
   calldataBuildError?: string;
   recipient?: `0x${string}`;
+  outAsset?: `0x${string}`;
+  minOutWei?: bigint;
   deadline?: bigint;
   valueWei: bigint;
   rationale: string;
@@ -59,6 +61,7 @@ export interface MerchantMoeForkSimulationFinding {
     | "ROUTER_ALLOWANCE_TOO_LOW"
     | "ROUTER_ALLOWANCE_UNSAFE"
     | "VAULT_MISSING"
+    | "GUARDED_OUTPUT_MISSING"
     | "QUOTE_RISK_BLOCKED"
     | "SIMULATION_FAILED"
     | "FORK_EXECUTION_FAILED"
@@ -73,6 +76,7 @@ export interface MerchantMoeVaultEvidence {
   paused: boolean;
   tokenAllowed: boolean;
   routerAllowed: boolean;
+  routerGuarded: boolean;
   spendLimitPerTx: string;
   dailyLimit: string;
   spentToday: string;
@@ -115,6 +119,7 @@ export interface MerchantMoeForkSimulationReport {
   target: `0x${string}`;
   calldataSource: MerchantMoeForkSimulationCalldataSource;
   recipient?: `0x${string}`;
+  outAsset?: `0x${string}`;
   deadline?: string;
   valueWei: string;
   calldataSelector?: `0x${string}`;
@@ -238,10 +243,19 @@ function withAutoCalldata(
   config: MerchantMoeForkSimulationConfig,
   quote?: MerchantMoeQuote,
 ): MerchantMoeForkSimulationConfig {
-  if (config.calldata || !quote) return config;
+  if (!quote) return config;
 
-  const recipient = autoRecipient(config);
-  if (!recipient) return config;
+  const outAsset = quote.route.at(-1);
+  const minOutWei = parseReadinessBigint(readiness.minOutWei, "minOutWei");
+  const guardedConfig = {
+    ...config,
+    outAsset,
+    minOutWei,
+  };
+  if (config.calldata) return guardedConfig;
+
+  const recipient = autoRecipient(guardedConfig);
+  if (!recipient) return guardedConfig;
 
   try {
     const amountIn = parseReadinessBigint(readiness.amountIn, "amountIn");
@@ -262,6 +276,8 @@ function withAutoCalldata(
       calldata,
       calldataSource: "auto",
       recipient,
+      outAsset,
+      minOutWei,
       deadline,
     };
   } catch (error) {
@@ -270,6 +286,8 @@ function withAutoCalldata(
       calldataSource: "build-error",
       calldataBuildError: errorReason(error),
       recipient,
+      outAsset,
+      minOutWei,
     };
   }
 }
@@ -334,7 +352,17 @@ function baseFindings(
     findings.push({
       ruleId: "VAULT_MISSING",
       severity: "blocker",
-      reason: "Set MERCHANT_MOE_SIMULATION_VAULT to simulate AgentVault.execute on a fork.",
+      reason: "Set MERCHANT_MOE_SIMULATION_VAULT to simulate AgentVault.executeGuarded on a fork.",
+    });
+  }
+  if (
+    config.mode === "vault-execute" &&
+    (!config.outAsset || config.minOutWei === undefined || config.minOutWei <= 0n)
+  ) {
+    findings.push({
+      ruleId: "GUARDED_OUTPUT_MISSING",
+      severity: "blocker",
+      reason: "Vault swap simulation requires the quoted output asset and a positive minOutWei.",
     });
   }
   if (readiness.quoteRisk.status === "blocked") {
@@ -503,9 +531,16 @@ async function simulateVaultExecute(
   const call = {
     address: config.vault,
     abi: VAULT_ABI,
-    functionName: "execute",
+    functionName: "executeGuarded",
     account: config.from,
-    args: [router, config.valueWei, config.calldata, config.rationale],
+    args: [
+      router,
+      config.valueWei,
+      config.calldata,
+      config.outAsset,
+      config.minOutWei,
+      config.rationale,
+    ],
   };
   try {
     if (!client.simulateContract) throw new Error("fork client does not support simulateContract");
@@ -547,6 +582,9 @@ function nextSteps(report: Pick<MerchantMoeForkSimulationReport, "simulationPass
   }
   if (report.findings.some((finding) => finding.ruleId === "SIMULATION_FROM_MISSING")) {
     steps.push("Choose a fork account/vault-like address with the token balances and approvals needed for the swap.");
+  }
+  if (report.findings.some((finding) => finding.ruleId === "GUARDED_OUTPUT_MISSING")) {
+    steps.push("Attach the quoted output token and positive minOutWei before simulating the vault swap.");
   }
   if (report.findings.some((finding) => finding.ruleId === "ERC20_PREFLIGHT_FAILED")) {
     steps.push("Fix ERC20 balance/allowance reads on the fork RPC before attempting router simulation.");
@@ -626,6 +664,7 @@ export async function buildMerchantMoeForkSimulationReport(
     target: resolvedConfig.mode === "vault-execute" ? resolvedConfig.vault ?? resolvedConfig.router : resolvedConfig.router,
     calldataSource: resolvedConfig.calldataSource,
     recipient: resolvedConfig.recipient,
+    outAsset: resolvedConfig.outAsset,
     deadline: resolvedConfig.deadline?.toString(),
     valueWei: resolvedConfig.valueWei.toString(),
     calldataSelector: resolvedConfig.calldata?.slice(0, 10) as `0x${string}` | undefined,
@@ -665,6 +704,7 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `vault: ${report.vault ?? "none"}`,
     `calldataSource: ${report.calldataSource}`,
     `recipient: ${report.recipient ?? "none"}`,
+    `outAsset: ${report.outAsset ?? "none"}`,
     `deadline: ${report.deadline ?? "none"}`,
     `calldataSelector: ${report.calldataSelector ?? "none"}`,
     `calldataBytes: ${report.calldataBytes}`,
@@ -685,6 +725,7 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `revertReason: ${report.simulation?.revertReason ?? "none"}`,
     `vaultAddress: ${report.vaultEvidence?.address ?? "none"}`,
     `vaultRouterAllowed: ${report.vaultEvidence?.routerAllowed ?? "none"}`,
+    `vaultRouterGuarded: ${report.vaultEvidence?.routerGuarded ?? "none"}`,
     `vaultTokenAllowed: ${report.vaultEvidence?.tokenAllowed ?? "none"}`,
     `vaultPaused: ${report.vaultEvidence?.paused ?? "none"}`,
     `vaultNonceBeforeSwap: ${report.vaultEvidence?.nonceBeforeSwap ?? "none"}`,

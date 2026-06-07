@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { parseEther } from "viem";
 import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
-import { chain, baselineVaultAddress, dexAddress, getBaselineWalletClient } from "./config.js";
+import { chain, baselineVaultAddress, dexAddress, getBaselineWalletClient, mockTokenAddress } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import { createProtocolRegistry } from "./protocols/registry.js";
@@ -13,7 +13,7 @@ import { simulateExecute } from "./simulation/simulator.js";
 import { createJsonlTraceWriter } from "./tracing.js";
 
 const DCA_MNT = "0.005";
-const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, readPrice)]);
+const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, mockTokenAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createOracleRouterFromEnv(readPrice);
 const riskLimits = loadRiskLimitsFromEnv();
