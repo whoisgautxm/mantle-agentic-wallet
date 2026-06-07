@@ -1,6 +1,6 @@
 import { createPublicClient, http, parseAbiItem } from "viem";
 import { mantleSepoliaTestnet } from "viem/chains";
-import addresses from "../data/addresses.json";
+import addresses from "../../shared/addresses.json";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const fromBlock = BigInt(addresses.deployBlock ?? 0);

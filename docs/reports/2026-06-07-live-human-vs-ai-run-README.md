@@ -8,9 +8,9 @@
 > - **P0.2 Terminal traces — DONE.** Every started tick emits exactly one terminal `agent.final_action`; the loop catch records typed `reverted`/`error` outcomes with `tickId`, tx hash, and gas via the new `ExecuteRevertedError`. (commit `4cf53ab`)
 > - **P0.3 Replay false positive — DONE.** `FAILED_SIMULATION_RISK` is now same-tick (`simulationFailureExecutions`), not aggregate; regression tests added. (commit `4086e05`)
 > - **P0.4 Real cost accounting — DONE.** `submitExecute` returns realized `gasUsedWei`/`gasCostWei`; runners trace per-tick + cumulative gas and gas-adjusted ROI; pure `gasAdjustedRoiBps` helper tested against this report's −452 bps figure. (commit `796ccc7`)
-> - **P0.5 Dashboard provenance — NOT YET DONE.** Still needs the run-provenance/accounting-mode banner and "never headline a stale snapshot as the live leader" behavior (web/).
+> - **P0.5 Dashboard provenance — DONE.** Root cause fixed: the dashboard read a stale duplicate `web/data/addresses.json` (old vaults `0xd9a1…`/`0xD786…`); all importers now read the single `shared/addresses.json`, and the copy was deleted so it cannot drift again. Added a run-provenance banner (LIVE/SNAPSHOT badge, deployment addresses + deploy block, block range, vault-only accounting label) that explicitly states when the standing reflects a tracked snapshot rather than a live run. Web build/lint/typecheck/tests green.
 >
-> Remaining for a fully valid next live run: P0.5, plus the P1 items (explicit ensemble modes, recovery-state logic, dynamic gas cost gate, quote-to-submit freshness re-quote, and a seeded/scripted keeper to remove the `Math.random` race at its source).
+> **The full P0 measurement-integrity slice is now complete.** Remaining are the P1 items (explicit ensemble modes, recovery-state logic, dynamic gas cost gate, quote-to-submit freshness re-quote, and a seeded/scripted keeper to remove the `Math.random` race at its source).
 
 
 Run date: June 7, 2026  

@@ -12,7 +12,7 @@ import ProtocolReadinessPanel from "./components/ProtocolReadinessPanel";
 import RiskPanel from "./components/RiskPanel";
 import SimulationFeedPanel from "./components/SimulationFeedPanel";
 import EvalReadinessPanel from "./components/EvalReadinessPanel";
-import addresses from "../data/addresses.json";
+import addresses from "../../shared/addresses.json";
 import { getEvalReadiness } from "../lib/evalReadiness";
 import { getLendingEvidence } from "../lib/lendingEvidence";
 import { getPortfolioStatus } from "../lib/portfolio";
@@ -98,6 +98,19 @@ export default async function Page() {
     : undefined;
   const standing = currentStanding(series, snapshotStarts);
 
+  // Run provenance (live-run report section 13): never present a stale snapshot as the live leader.
+  const dex = (addresses as any).mockDex as string;
+  const deployBlock = (addresses as any).deployBlock ?? "?";
+  const dataSourceLabel = usingSnapshot ? "Tracked snapshot" : "Live on-chain";
+  const dataSourceDetail = usingSnapshot
+    ? `${replaySnapshot.source}, captured ${new Date(replaySnapshot.generatedAt).toLocaleString()}`
+    : "live RPC reads";
+  const blockRange = usingSnapshot
+    ? `${replaySnapshot.fromBlock}-${replaySnapshot.toBlock}`
+    : prices.length
+      ? `${prices[0].block.toString()}-${prices[prices.length - 1].block.toString()}`
+      : "n/a";
+
   return (
     <main>
       <meta httpEquiv="refresh" content="15" />
@@ -116,6 +129,30 @@ export default async function Page() {
           <span>Baseline</span>
           <strong>{short(baselineVault)}</strong>
         </div>
+      </section>
+
+      <section className="insights single">
+        <section className="insight-card">
+          <div className="section-head compact">
+            <div>
+              <p className="eyebrow">Run provenance</p>
+              <h2>{dataSourceLabel} · accounting: vault-only ROI</h2>
+            </div>
+            <span className={`badge ${usingSnapshot ? "warn" : "ok"}`}>{usingSnapshot ? "SNAPSHOT" : "LIVE"}</span>
+          </div>
+          <div className="eval-findings">
+            <span>
+              Deployment — AI {short(aiVault)} · Baseline {short(baselineVault)} · DEX {short(dex)} · deploy block {deployBlock}
+            </span>
+            <span>
+              Data source: {dataSourceDetail}. Block range {blockRange}.
+            </span>
+            <span>
+              The standing below reflects the {usingSnapshot ? "tracked snapshot — not a live run" : "live on-chain run"}. ROI is
+              vault-only and excludes runner gas; gas-adjusted ROI is recorded per decision in the agent trace.
+            </span>
+          </div>
+        </section>
       </section>
 
       <section className="stats">
