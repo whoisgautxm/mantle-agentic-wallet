@@ -71,7 +71,7 @@ Live Mantle mainnet transaction submission remains deliberately disabled. The pr
 | Check | Result |
 |---|---|
 | Foundry contracts | 26/26 passing |
-| Agent tests | 135/135 passing |
+| Agent tests | 139/139 passing |
 | Agent TypeScript | Clean |
 | Dashboard production build | Passing |
 | Public Vercel smoke test | Passing |

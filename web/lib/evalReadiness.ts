@@ -1,5 +1,6 @@
 import { readFile, stat } from "fs/promises";
 import path from "path";
+import multiRegimeSnapshot from "../data/latest-multi-regime-benchmark.json";
 import openAiReplaySnapshot from "../data/latest-openai-replay-eval.json";
 import scenarioSnapshot from "../data/latest-scenario-summary.json";
 import traceSnapshot from "../data/latest-trace-summary.json";
@@ -105,6 +106,29 @@ interface OpenAiReplaySummary {
   }>;
 }
 
+interface MultiRegimeSummary {
+  ok?: boolean;
+  model?: string;
+  generatedAt?: string;
+  aggregate?: {
+    regimes?: number;
+    aiWins?: number;
+    baselineWins?: number;
+    aiAverageNetRoiBps?: string;
+    baselineAverageNetRoiBps?: string;
+    aiAverageEdgeBps?: string;
+    aiWorstDrawdownBps?: string;
+    baselineWorstDrawdownBps?: string;
+    modelErrors?: number;
+  };
+  regimes?: Array<{
+    label?: string;
+    winner?: string;
+    ai?: { netRoiBps?: string };
+    baseline?: { netRoiBps?: string };
+  }>;
+}
+
 interface Artifact<T> {
   data: T;
   path: string;
@@ -186,6 +210,16 @@ function openAiReplayCandidates(root: string): string[] {
   return [
     ...(configured ? [agentPath(root, configured)] : [path.join(root, "agent", "traces", "openai-replay-eval.json")]),
     ...webDataCandidates(root, "latest-openai-replay-eval.json"),
+  ];
+}
+
+function multiRegimeCandidates(root: string): string[] {
+  const configured = process.env.MULTI_REGIME_EVAL_OUTPUT?.trim();
+  return [
+    ...(configured
+      ? [agentPath(root, configured)]
+      : [path.join(root, "agent", "traces", "multi-regime-benchmark.json")]),
+    ...webDataCandidates(root, "latest-multi-regime-benchmark.json"),
   ];
 }
 
@@ -367,8 +401,72 @@ async function openAiReplayItem(root: string): Promise<EvalReadinessItem> {
   };
 }
 
+async function multiRegimeItem(root: string): Promise<EvalReadinessItem> {
+  const artifact = await readJsonArtifact<MultiRegimeSummary>(multiRegimeCandidates(root), {
+    data: multiRegimeSnapshot as MultiRegimeSummary,
+    path: path.join(root, "web", "data", "latest-multi-regime-benchmark.json"),
+    updatedAt: multiRegimeSnapshot.generatedAt,
+  });
+  const command =
+    "cd agent && npm run eval:multi-regime -- evals/market-regimes.json traces/multi-regime-benchmark.json";
+
+  if (!("data" in artifact)) {
+    const problem = artifactProblem(root, artifact);
+    return {
+      id: "multi-regime-evals",
+      name: "Multi-regime eval",
+      description: "Cost-aware live model benchmark",
+      status: artifact.error ? "bad" : "warn",
+      label: artifact.error ? "Invalid" : "Not generated",
+      detail: problem.detail,
+      command,
+      artifactPath: problem.artifactPath,
+      metrics: [],
+      findings: problem.findings,
+    };
+  }
+
+  const aggregate = artifact.data.aggregate ?? {};
+  const modelErrors = int(aggregate.modelErrors);
+  const findings = (artifact.data.regimes ?? []).slice(0, 4).map(
+    (regime) =>
+      `${regime.label ?? "Regime"}: AI ${regime.ai?.netRoiBps ?? "n/a"} bps vs DCA ${
+        regime.baseline?.netRoiBps ?? "n/a"
+      } bps; ${regime.winner ?? "n/a"} won after costs.`,
+  );
+  if (modelErrors) findings.unshift(`${modelErrors} model tick(s) failed; rerun after checking API limits.`);
+
+  return {
+    id: "multi-regime-evals",
+    name: "Multi-regime eval",
+    description: "Cost-aware live model benchmark",
+    status: artifact.data.ok ? "ok" : "bad",
+    label: artifact.data.ok ? "Complete" : "Incomplete",
+    detail: `${int(aggregate.regimes)} market regime(s) evaluated with ${artifact.data.model ?? "OpenAI"}; fees, slippage, and gas are deducted.`,
+    command,
+    artifactPath: displayPath(root, artifact.path),
+    updatedAt: artifact.data.generatedAt ?? artifact.updatedAt,
+    metrics: [
+      { label: "AI wins", value: int(aggregate.aiWins).toString() },
+      { label: "DCA wins", value: int(aggregate.baselineWins).toString() },
+      { label: "AI avg ROI", value: aggregate.aiAverageNetRoiBps ?? "n/a" },
+      { label: "DCA avg ROI", value: aggregate.baselineAverageNetRoiBps ?? "n/a" },
+      { label: "AI edge", value: aggregate.aiAverageEdgeBps ?? "n/a" },
+      { label: "AI drawdown", value: aggregate.aiWorstDrawdownBps ?? "n/a" },
+      { label: "DCA drawdown", value: aggregate.baselineWorstDrawdownBps ?? "n/a" },
+      { label: "Model errors", value: modelErrors.toString() },
+    ],
+    findings,
+  };
+}
+
 export async function getEvalReadiness(): Promise<EvalReadiness> {
   const root = workspaceRoot();
-  const [scenarios, traces, openAiReplay] = await Promise.all([scenarioItem(root), traceItem(root), openAiReplayItem(root)]);
-  return { items: [scenarios, traces, openAiReplay] };
+  const [scenarios, traces, openAiReplay, multiRegime] = await Promise.all([
+    scenarioItem(root),
+    traceItem(root),
+    openAiReplayItem(root),
+    multiRegimeItem(root),
+  ]);
+  return { items: [scenarios, traces, openAiReplay, multiRegime] };
 }

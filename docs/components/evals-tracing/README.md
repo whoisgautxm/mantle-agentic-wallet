@@ -17,13 +17,15 @@ Implemented v1:
 - `npm run eval:traces` reads a trace JSONL file.
 - `npm run eval:scenarios` runs deterministic risk scenarios without RPC, private keys, or model calls.
 - `npm run eval:openai-replay` runs an OpenAI model-backed replay judge against real JSONL traces.
+- `npm run eval:multi-regime` runs the real OpenAI decision path across four deterministic price regimes.
+- Multi-regime settlement deducts swap fees, slippage, and gas before comparing AI and DCA.
 - It grades whether executed ticks had passing risk and simulation results.
 - It verifies failed risk/simulation outcomes do not execute.
 - It flags stale-oracle execution.
 - It can write a JSON summary for reports and dashboards.
-- The dashboard reads trace, scenario, and OpenAI replay summary JSON artifacts and shows replay benchmark status.
+- The dashboard reads trace, scenario, OpenAI replay, and multi-regime summary JSON artifacts and shows replay benchmark status.
 
-The next step is scenario-based behavioral evaluation:
+The next step is broader scenario-based behavioral evaluation:
 
 - Did the agent choose a safe action?
 - Did it obey limits?
@@ -94,6 +96,16 @@ Implemented OpenAI replay eval v1:
 - Writes `agent/traces/openai-replay-eval.json`.
 - Scores safety, decision quality, evidence quality, and AI-vs-baseline performance.
 
+Implemented multi-regime eval v1:
+
+- Uses only prices observed up to the current tick, so the model receives no future-price leakage.
+- Reuses the production tool schema, intent normalization, MockDEX adapter, and risk engine.
+- Runs mean-reversion, steady-rally, controlled-selloff, and shock-recovery fixtures.
+- Deducts configurable fees, slippage, and gas from both AI and DCA.
+- Records ROI, edge, cost drag, turnover, drawdown, blocked actions, and model errors.
+- Retries OpenAI 429 responses using server retry hints instead of grading throttles as strategy holds.
+- Supports an API-free deterministic mode for fast CI and settlement regression tests.
+
 The OpenAI Agents SDK has built-in tracing for model generations, tool calls, guardrails, handoffs, and custom events. OpenAI agent evals support traces, graders, datasets, and eval runs for improving workflow quality. The current project uses a code-first replay judge first; hosted trace grading/datasets can be added once the real-agent trace set is larger.
 
 ## Suggested Metrics
@@ -114,9 +126,9 @@ The OpenAI Agents SDK has built-in tracing for model generations, tool calls, gu
 - `npm run eval:traces` grades replayed JSONL traces. Implemented.
 - `npm run eval:openai-replay` grades replayed JSONL traces with a real OpenAI judge model. Implemented.
 - A failed risk rule can be graded as a success if the agent was blocked safely.
-- Results can be written to JSON for the dashboard/report. Implemented for trace, scenario, and OpenAI replay summaries.
+- Results can be written to JSON for the dashboard/report. Implemented for trace, scenario, OpenAI replay, and multi-regime summaries.
 - The dashboard exposes eval artifact status, pass/fail metrics, model-backed scores, and top findings. Implemented.
-- Prompt/model changes can be compared run-to-run once model-in-the-loop scenarios are added.
+- Prompt/model changes can be compared run-to-run with the tracked multi-regime fixture. Implemented.
 
 ## Resources
 

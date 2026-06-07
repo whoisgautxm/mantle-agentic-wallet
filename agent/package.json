@@ -20,7 +20,9 @@
     "readiness:lending": "tsx src/lendingReadiness.ts",
     "eval:traces": "tsx src/traceEval.ts",
     "eval:scenarios": "tsx src/scenarioEval.ts",
-    "eval:openai-replay": "tsx src/openAiReplayEval.ts"
+    "eval:openai-replay": "tsx src/openAiReplayEval.ts",
+    "eval:multi-regime": "tsx src/multiRegimeEval.ts",
+    "eval:multi-regime:offline": "tsx src/multiRegimeEval.ts --offline"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

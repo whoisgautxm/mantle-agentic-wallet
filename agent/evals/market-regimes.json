@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "name": "Mantle Human-vs-AI multi-regime benchmark",
+  "initialPortfolio": {
+    "mnt": "1",
+    "token": "0"
+  },
+  "baseline": {
+    "buyMnt": "0.02"
+  },
+  "costs": {
+    "swapFeeBps": 30,
+    "slippageBps": 20,
+    "gasMnt": "0.0002"
+  },
+  "vaultLimits": {
+    "spendPerTxMnt": "0.1",
+    "dailySpendMnt": "1"
+  },
+  "regimes": [
+    {
+      "id": "mean-reversion",
+      "label": "Mean reversion",
+      "description": "Repeated dips and recoveries reward selective entries and bounded profit taking.",
+      "prices": ["2.00", "1.90", "1.82", "1.96", "2.12", "2.02", "1.86", "2.05"]
+    },
+    {
+      "id": "steady-rally",
+      "label": "Steady rally",
+      "description": "A persistent uptrend tests whether timing adds value over continuous DCA exposure.",
+      "prices": ["1.80", "1.85", "1.92", "2.00", "2.10", "2.20", "2.30", "2.42"]
+    },
+    {
+      "id": "controlled-selloff",
+      "label": "Controlled selloff",
+      "description": "A persistent decline tests capital preservation and resistance to repeated dip buying.",
+      "prices": ["2.40", "2.30", "2.18", "2.05", "1.92", "1.80", "1.70", "1.60"]
+    },
+    {
+      "id": "shock-recovery",
+      "label": "Shock and recovery",
+      "description": "A sudden drawdown followed by recovery tests sizing, patience, and turnover costs.",
+      "prices": ["2.00", "2.02", "1.98", "1.45", "1.55", "1.72", "1.95", "2.10"]
+    }
+  ]
+}

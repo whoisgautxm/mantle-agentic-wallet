@@ -33,6 +33,11 @@ export interface ReasoningClient {
   openai?: OpenAI;
 }
 
+export interface DecisionOptions {
+  anthropicModel?: string;
+  openAiModel?: string;
+}
+
 function parsePositiveEtherAmount(value: unknown, field: string): bigint {
   if (typeof value !== "string" && typeof value !== "number") {
     throw new Error(`${field} must be a decimal string`);
@@ -185,9 +190,10 @@ async function decideWithAnthropic(
   priceHistory: bigint[],
   adapter: ProtocolAdapter,
   context: string,
+  model?: string,
 ): Promise<Decision> {
   const msg = await client.messages.create({
-    model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
+    model: model ?? process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
     max_tokens: 1024,
     system: [{ type: "text", text: buildSystemPrompt(state), cache_control: { type: "ephemeral" } }],
     tools: [PROPOSE_ACTION_TOOL],
@@ -208,9 +214,10 @@ async function decideWithOpenAI(
   priceHistory: bigint[],
   adapter: ProtocolAdapter,
   context: string,
+  model?: string,
 ): Promise<Decision> {
   const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-5.2",
+    model: model ?? process.env.OPENAI_MODEL ?? "gpt-5.2",
     input: [
       { role: "system", content: buildSystemPrompt(state) },
       { role: "user", content: buildUserPrompt(context, priceHistory) },
@@ -243,12 +250,13 @@ export async function decide(
   priceHistory: bigint[],
   adapter: ProtocolAdapter,
   context: string,
+  options: DecisionOptions = {},
 ): Promise<Decision> {
   if (client.provider === "openai") {
     if (!client.openai) throw new Error("OpenAI client missing");
-    return decideWithOpenAI(client.openai, state, priceHistory, adapter, context);
+    return decideWithOpenAI(client.openai, state, priceHistory, adapter, context, options.openAiModel);
   }
 
   if (!client.anthropic) throw new Error("Anthropic client missing");
-  return decideWithAnthropic(client.anthropic, state, priceHistory, adapter, context);
+  return decideWithAnthropic(client.anthropic, state, priceHistory, adapter, context, options.anthropicModel);
 }

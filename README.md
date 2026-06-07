@@ -7,7 +7,7 @@
 **Stack:** Solidity + Foundry, TypeScript + viem, OpenAI or Anthropic provider, Next.js
 
 ![Contracts](https://img.shields.io/badge/forge%20tests-26%2F26-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-135%2F135-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-139%2F139-brightgreen)
 ![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -48,6 +48,19 @@ Real-protocol evidence was also verified on disposable Mantle mainnet forks:
 - Merchant Moe WMNT -> USDC passed quote, bounded allowance, simulation, `AgentVault.execute`, output-delta, nonce, and `AgentDecision` checks at fork block `96329880`.
 - The adversarial fork suite passed `5/5` at block `96329905`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stopped before unsafe swap submission.
 - Live Mantle mainnet execution remains deliberately disabled. The production-shaped path is proven on a fork without exposing real funds.
+
+### Multi-Regime Generalization Check
+
+The June 7 cost-aware benchmark ran the real OpenAI decision path with `gpt-5-mini` across four deterministic, no-lookahead market regimes. Every execution deducted 30 bps swap fee, 20 bps slippage, and `0.0002 MNT` gas.
+
+| Result | AI | DCA baseline |
+|---|---:|---:|
+| Regime wins | 2 | 2 |
+| Average net return | +7 bps | +54 bps |
+| Worst drawdown | -457 bps | -314 bps |
+| Model errors | 0 | 0 |
+
+This benchmark intentionally exposes a strategy weakness rather than claiming universal outperformance. The current mean-reversion prompt performs well in choppy and shock-recovery paths, but sells too early in persistent rallies and keeps buying through persistent selloffs. The next strategy improvement should add trend/regime awareness and be accepted only if it improves held-out scenarios without weakening safety.
 
 ---
 
@@ -206,7 +219,7 @@ Expected current results:
 | Suite | Command | Expected |
 |---|---|---|
 | Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 135 passing |
+| Agent | `cd agent && npm test` | 139 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
 | Dashboard build | `cd web && npm run build` | clean |
 
@@ -405,6 +418,22 @@ npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eva
 
 This command loads the repo root `.env` and `agent/.env`, summarizes AI/baseline replay ticks plus real-protocol readiness signals, and asks an OpenAI model for a structured report covering safety, decision quality, evidence quality, and AI-vs-baseline performance. Set `OPENAI_EVAL_MODEL` to override the judge model; otherwise it uses `OPENAI_MODEL`.
 
+To test the real agent across deterministic market regimes with fees, slippage, and gas deducted:
+
+```bash
+cd agent
+npm run eval:multi-regime -- evals/market-regimes.json traces/multi-regime-benchmark.json
+```
+
+The benchmark runs the same OpenAI intent parser, MockDEX adapter, sizing normalization, and risk engine without submitting chain transactions. It compares the AI with fixed DCA across mean-reversion, rally, selloff, and shock-recovery fixtures. Set `OPENAI_BENCHMARK_MODEL` to override the evaluated model. Rate limits are retried using API retry hints; `OPENAI_BENCHMARK_MAX_RETRIES` controls the bounded retry count and `OPENAI_BENCHMARK_MIN_INTERVAL_MS` can pace low-RPM projects.
+
+For a fast, API-free settlement check:
+
+```bash
+cd agent
+npm run eval:multi-regime:offline -- evals/market-regimes.json traces/multi-regime-benchmark-offline.json
+```
+
 The dashboard reads these summary artifacts when present:
 
 ```bash
@@ -412,9 +441,10 @@ cd agent
 npm run eval:traces -- traces/agent-events.jsonl traces/trace-summary.json
 npm run eval:scenarios -- evals/scenarios traces/scenario-summary.json
 npm run eval:openai-replay -- traces/agent-events.jsonl traces/openai-replay-eval.json
+npm run eval:multi-regime -- evals/market-regimes.json traces/multi-regime-benchmark.json
 ```
 
-If `TRACE_EVAL_OUTPUT`, `SCENARIO_EVAL_OUTPUT`, or `OPENAI_REPLAY_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
+If `TRACE_EVAL_OUTPUT`, `SCENARIO_EVAL_OUTPUT`, `OPENAI_REPLAY_EVAL_OUTPUT`, or `MULTI_REGIME_EVAL_OUTPUT` are set, the dashboard uses those paths instead. Relative paths are resolved from `agent/`.
 
 The dashboard also reads the latest `merchant_moe.quote_smoke`, `merchant_moe.fork_readiness`, `merchant_moe.fork_simulation`, and `lending.readiness` events from the JSONL trace. It shows route, amount, min-output, slippage, quote-risk, fork-RPC, fork simulation status, health factor, liquidation buffer, blockers, and next-step evidence in real-protocol panels. The execution preflight feed also replays proposed agent/baseline transactions and Merchant Moe fork simulations with target, selector, value, calldata bytes, simulation pass/fail, gas estimate, revert reason, tx hash, and blocked-execution reason.
 
@@ -545,11 +575,12 @@ Completed for the hackathon submission:
 - Five-case adversarial Merchant Moe release gate with zero unsafe swap submissions
 - Read-only Lendle/INIT-style health-factor, cap, utilization, and liquidation-buffer readiness
 - Structured JSONL decision traces, deterministic scenario evals, and model-backed OpenAI replay judging
+- Transaction-cost-aware live OpenAI benchmarks across four deterministic market regimes
 - Human-vs-AI event dashboard with PnL, decisions, simulations, protocol gates, and deploy-safe evidence
 
 Post-hackathon:
 
-- Longer multi-regime benchmarks with transaction-cost-aware strategy scoring
+- Longer historical and randomized regime packs beyond the current four-scenario benchmark
 - Additional real DEX routes and lending protocol fork fixtures
 - Multi-agent leaderboard from event logs
 - ERC-4337 session keys after the protocol/risk stack is stable
