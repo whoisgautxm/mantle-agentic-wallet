@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { parseEther } from "viem";
-import { readVaultState, submitExecute, isTargetAllowed, readPrice } from "./chain.js";
+import { readVaultState, submitExecute, isTargetAllowed, readPrice, ExecuteRevertedError } from "./chain.js";
 import { chain, baselineVaultAddress, dexAddress, getBaselineWalletClient, mockTokenAddress } from "./config.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
@@ -30,8 +30,26 @@ async function recordTrace(type: string, payload: Record<string, unknown>): Prom
   }
 }
 
-async function tick(): Promise<void> {
-  const tickId = randomUUID();
+async function recordTerminalError(runner: string, tickId: string, error: unknown): Promise<void> {
+  const reverted = error instanceof ExecuteRevertedError;
+  await recordTrace("agent.final_action", {
+    tickId,
+    runner,
+    outcome: reverted ? "reverted" : "error",
+    reason: (error as any)?.message ?? "unknown error",
+    ...(reverted
+      ? {
+          txHash: (error as ExecuteRevertedError).hash,
+          gas: {
+            gasUsedWei: (error as ExecuteRevertedError).gasUsedWei.toString(),
+            gasCostWei: (error as ExecuteRevertedError).gasCostWei.toString(),
+          },
+        }
+      : {}),
+  });
+}
+
+async function tick(tickId: string): Promise<void> {
   await recordTrace("agent.tick.started", {
     tickId,
     runner: "baseline",
@@ -201,14 +219,13 @@ async function main() {
   const loop = async () => {
     if (!running) {
       running = true;
+      const tickId = randomUUID();
       try {
-        await tick();
+        await tick(tickId);
       } catch (e) {
         console.error("[baseline error]", e);
-        await recordTrace("agent.tick.error", {
-          runner: "baseline",
-          error: e,
-        });
+        // Guarantee exactly one terminal event for this started tick (reverted or error).
+        await recordTerminalError("baseline", tickId, e);
       } finally {
         running = false;
       }
