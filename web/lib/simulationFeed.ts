@@ -146,6 +146,23 @@ interface MerchantMoeForkSimulationReport {
   mode?: string;
   fixtureMode?: boolean;
   fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  liveCap?: {
+    status?: "disabled" | "ready-disabled" | "eligible" | "blocked";
+    eligible?: boolean;
+    executionEnabled?: boolean;
+    reason?: string;
+    policy?: {
+      maxAmountInWei?: string | number;
+      maxSlippageBps?: string | number;
+      maxQuoteDeviationBps?: string | number;
+      maxAllowanceMultipleBps?: string | number;
+    };
+    blockers?: Array<{
+      ruleId?: string;
+      severity?: string;
+      reason?: string;
+    }>;
+  };
   forkBlockNumber?: string | number;
   setupTransactionHashes?: string[];
   simulationMode?: string;
@@ -177,6 +194,7 @@ interface MerchantMoeForkSimulationReport {
   forkExecution?: {
     attempted?: boolean;
     passed?: boolean;
+    vaultFunction?: string;
     transactionHash?: string;
     gasUsed?: string | number;
     agentDecisionEvents?: string | number;
@@ -287,10 +305,6 @@ function text(value: unknown, fallback = "n/a"): string {
 function optionalText(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return String(value);
-}
-
-function yesNo(value: unknown): string {
-  return value ? "yes" : "no";
 }
 
 function byteLength(calldata: unknown): string {
@@ -458,10 +472,16 @@ function primaryBlocker(
     (report.findings ?? []).find((entry) => entry.severity === "blocker" || entry.severity === "critical") ??
     (report.findings ?? [])[0];
   if (finding) return { ruleId: finding.ruleId, reason: text(finding.reason, "review simulation report") };
+  if (report.liveCap?.status === "blocked" && report.liveCap.blockers?.[0]) {
+    return {
+      ruleId: report.liveCap.blockers[0].ruleId,
+      reason: text(report.liveCap.blockers[0].reason, "review live-cap report"),
+    };
+  }
   if (!report.executionEnabled) {
     return {
       ruleId: "LIVE_EXECUTION_DISABLED",
-      reason: "Live execution is disabled for this protocol path.",
+      reason: report.liveCap?.reason ?? "Live execution is disabled for this protocol path.",
     };
   }
   return { reason: "none" };
@@ -510,6 +530,8 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
       { label: "Fork block", value: text(report.forkBlockNumber) },
       { label: "Setup txs", value: text(report.setupTransactionHashes?.length ?? 0) },
       { label: "Gas estimate", value: text(simulation?.gasEstimate) },
+      { label: "Live cap", value: text(report.liveCap?.status, "not captured") },
+      { label: "Amount cap", value: text(report.liveCap?.policy?.maxAmountInWei) },
       { label: "Calldata bytes", value: text(report.calldataBytes, "0") },
       { label: "Value wei", value: text(report.valueWei) },
       { label: "Min out", value: text(report.minOutWei) },
@@ -519,12 +541,16 @@ function itemFromMerchantMoeForkSimulation(root: string, artifact: TraceArtifact
         label: "Fork execution",
         value: report.forkExecution?.passed ? "pass" : report.forkExecution?.attempted ? "fail" : "not run",
       },
+      { label: "Vault function", value: text(report.forkExecution?.vaultFunction) },
       { label: "Fork gas", value: text(report.forkExecution?.gasUsed) },
       { label: "Output delta", value: text(report.forkExecution?.tokenOutDelta) },
       { label: "Decision events", value: text(report.forkExecution?.agentDecisionEvents) },
     ],
     findings: [
       ...(report.findings ?? []).map((finding) => `${finding.ruleId ?? "FINDING"}: ${finding.reason ?? "review report"}`),
+      ...(report.liveCap?.status === "blocked"
+        ? (report.liveCap.blockers ?? []).map((finding) => `${finding.ruleId ?? "LIVE_CAP"}: ${finding.reason ?? "review live-cap report"}`)
+        : []),
       ...(simulation?.revertReason || simulation?.reason ? [`Revert: ${simulation.revertReason ?? simulation.reason}`] : []),
     ].slice(0, 5),
   };

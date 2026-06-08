@@ -87,6 +87,20 @@ interface MerchantMoeForkReadinessReport {
 interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport {
   fixtureMode?: boolean;
   fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  liveCap?: {
+    status?: "disabled" | "ready-disabled" | "eligible" | "blocked";
+    eligible?: boolean;
+    executionEnabled?: boolean;
+    reason?: string;
+    policy?: {
+      maxAmountInWei?: string | number;
+      maxSlippageBps?: string | number;
+      maxQuoteDeviationBps?: string | number;
+      maxAllowanceMultipleBps?: string | number;
+    };
+    blockers?: Finding[];
+    warnings?: Finding[];
+  };
   forkBlockNumber?: string | number;
   setupTransactionHashes?: string[];
   simulationMode?: string;
@@ -125,6 +139,7 @@ interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport
     paused?: boolean;
     tokenAllowed?: boolean;
     routerAllowed?: boolean;
+    routerGuarded?: boolean;
     spendLimitPerTx?: string | number;
     dailyLimit?: string | number;
     spentToday?: string | number;
@@ -133,6 +148,7 @@ interface MerchantMoeForkSimulationReport extends MerchantMoeForkReadinessReport
   forkExecution?: {
     attempted?: boolean;
     passed?: boolean;
+    vaultFunction?: string;
     transactionHash?: string;
     gasUsed?: string | number;
     agentDecisionEvents?: string | number;
@@ -366,11 +382,35 @@ function forkExecutionStep(report: MerchantMoeForkSimulationReport): ProtocolGat
   return step(
     "fork-execution",
     "Vault fork execution",
-    "Submit one guarded swap through AgentVault.execute on the disposable Anvil fork.",
+    "Submit one guarded swap through AgentVault.executeGuarded on the disposable Anvil fork.",
     status,
     execution?.passed ? "Executed" : execution?.attempted ? "Failed" : "Waiting",
     execution?.reason ??
       `output delta ${text(execution?.tokenOutDelta)}, AgentDecision events ${text(execution?.agentDecisionEvents)}.`,
+  );
+}
+
+function liveCapStep(report: MerchantMoeForkSimulationReport): ProtocolGateStep {
+  const cap = report.liveCap;
+  const capStatus = cap?.status;
+  const status: ProtocolGateStatus =
+    capStatus === "eligible" || capStatus === "ready-disabled" ? "ok" : capStatus === "blocked" ? "bad" : "warn";
+  const label =
+    capStatus === "eligible"
+      ? "Eligible"
+      : capStatus === "ready-disabled"
+        ? "Caps pass"
+        : capStatus === "blocked"
+          ? "Cap blocked"
+          : "Disabled";
+  const firstBlocker = cap?.blockers?.[0];
+  return step(
+    "live-caps",
+    "Bounded live caps",
+    "Require Anvil fork execution, guarded vault path, auto calldata, bounded allowance, and route-size caps.",
+    status,
+    label,
+    cap?.reason ?? firstBlocker?.reason ?? "Live-cap evidence has not been captured yet.",
   );
 }
 
@@ -383,9 +423,10 @@ function executionStep(report: MerchantMoeForkSimulationReport): ProtocolGateSte
       "Final live-trading switch stays disabled until every upstream gate passes.",
       "ok",
       "Safely disabled",
-      anvilBacked
-        ? "Anvil-backed mainnet fork passed while live Merchant Moe execution stayed disabled."
-        : "Controlled fixture passed while live Merchant Moe execution stayed disabled.",
+      report.liveCap?.reason ??
+        (anvilBacked
+          ? "Anvil-backed mainnet fork passed while live Merchant Moe execution stayed disabled."
+          : "Controlled fixture passed while live Merchant Moe execution stayed disabled."),
     );
   }
 
@@ -449,6 +490,7 @@ function fallbackGate(root: string, artifact: MissingTraceArtifact | TraceArtifa
       step("allowance", "Router allowance", "Check router allowance before simulation.", "warn", "Missing", "No ERC20 preflight captured."),
       step("simulation", "Fork simulation", "Simulate on a mainnet fork.", "warn", "Missing", "No simulation captured."),
       step("fork-execution", "Vault fork execution", "Execute through AgentVault on a disposable fork.", "warn", "Missing", "No fork execution captured."),
+      step("live-caps", "Bounded live caps", "Check live execution caps.", "warn", "Missing", "No live-cap report captured."),
       step("execution", "Live execution", "Keep live swaps disabled until all gates pass.", "warn", "Disabled", "Live swaps disabled."),
     ],
     blockers: error ? [error] : [],
@@ -477,12 +519,17 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
     allowanceStep(normalizedReport),
     simulationStep(normalizedReport),
     ...(anvilBacked ? [forkExecutionStep(normalizedReport)] : []),
+    liveCapStep(normalizedReport),
     executionStep(normalizedReport),
   ];
   const status = statusFromSteps(steps);
   const blockers = (normalizedReport.findings ?? [])
     .filter((finding) => finding.severity === "blocker" || finding.severity === "critical")
     .map(findingText);
+  const liveCapBlockers =
+    normalizedReport.liveCap?.status === "blocked"
+      ? (normalizedReport.liveCap.blockers ?? []).map(findingText)
+      : [];
   const firstBad = steps.find((entry) => entry.status === "bad");
 
   const command = anvilBacked ? anvilCommand : normalizedReport.fixtureMode ? fixtureCommand : forkCommand;
@@ -520,6 +567,9 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
       { label: "Balance", value: text(normalizedReport.preflight?.balanceRaw) },
       { label: "Allowance", value: text(normalizedReport.preflight?.allowanceRaw) },
       { label: "Simulation", value: normalizedReport.simulationAttempted ? (normalizedReport.simulationPassed ? "passed" : "failed") : "not attempted" },
+      { label: "Live cap", value: text(normalizedReport.liveCap?.status, "not captured") },
+      { label: "Amount cap", value: text(normalizedReport.liveCap?.policy?.maxAmountInWei) },
+      { label: "Slippage cap", value: text(normalizedReport.liveCap?.policy?.maxSlippageBps) },
       { label: "Live execution", value: normalizedReport.executionEnabled ? "enabled" : "disabled" },
       { label: "Evidence mode", value: anvilBacked ? "Anvil fork" : normalizedReport.fixtureMode ? "fixture" : "fork" },
       { label: "Fork block", value: text(normalizedReport.forkBlockNumber) },
@@ -542,11 +592,12 @@ function gateFromEvent(root: string, artifact: TraceArtifact, event: TraceEvent)
             ? "failed"
             : "not attempted",
       },
+      { label: "Vault function", value: text(normalizedReport.forkExecution?.vaultFunction) },
       { label: "Output delta", value: text(normalizedReport.forkExecution?.tokenOutDelta) },
       { label: "Decision events", value: text(normalizedReport.forkExecution?.agentDecisionEvents) },
     ],
     steps,
-    blockers: blockers.slice(0, 5),
+    blockers: [...blockers, ...liveCapBlockers].slice(0, 5),
     nextSteps: (normalizedReport.nextSteps ?? []).slice(0, 5),
   };
 }

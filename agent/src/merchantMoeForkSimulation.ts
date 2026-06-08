@@ -3,6 +3,7 @@ import { mantle } from "viem/chains";
 import { pathToFileURL } from "url";
 import { loadProjectEnv } from "./projectEnv.js";
 import { buildMerchantMoeForkReadinessReport, type MerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
+import { evaluateMerchantMoeLiveCaps, type MerchantMoeLiveCapReport } from "./merchantMoeLiveCaps.js";
 import { parseMerchantMoeQuoteSmokeConfig, type MerchantMoeQuoteSmokeConfig } from "./merchantMoeQuoteSmoke.js";
 import { classifyAllowance } from "./portfolio/allowances.js";
 import { ERC20_ABI } from "./portfolio/erc20.js";
@@ -88,6 +89,7 @@ export interface MerchantMoeVaultEvidence {
 export interface MerchantMoeForkExecutionEvidence {
   attempted: boolean;
   passed: boolean;
+  vaultFunction?: "execute" | "executeGuarded";
   transactionHash?: `0x${string}`;
   gasUsed?: string;
   agentDecisionEvents: number;
@@ -106,7 +108,8 @@ export interface MerchantMoeForkSimulationReport {
   protocolId: "merchant-moe";
   mode: "mainnet-fork-simulation";
   simulationMode: MerchantMoeForkSimulationMode;
-  executionEnabled: false;
+  executionEnabled: boolean;
+  liveCap: MerchantMoeLiveCapReport;
   fixtureMode: boolean;
   fixtureKind?: MerchantMoeForkSimulationConfig["fixtureKind"];
   forkBlockNumber?: string;
@@ -615,6 +618,7 @@ export async function buildMerchantMoeForkSimulationReport(
   simulationConfig: MerchantMoeForkSimulationConfig,
   client?: ForkSimulationClient,
   quote?: MerchantMoeQuote,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<MerchantMoeForkSimulationReport> {
   const resolvedConfig = withAutoCalldata(readiness, simulationConfig, quote);
   const activeClient = client ?? createForkClient(resolvedConfig);
@@ -646,12 +650,11 @@ export async function buildMerchantMoeForkSimulationReport(
 
   const simulationPassed = Boolean(simulation?.ok);
   const hardBlock = findings.some((finding) => finding.severity === "blocker" || finding.severity === "critical");
-  const report = {
+  const reportBase = {
     ok: simulationPassed && !hardBlock,
     protocolId: "merchant-moe" as const,
     mode: "mainnet-fork-simulation" as const,
     simulationMode: resolvedConfig.mode,
-    executionEnabled: false as const,
     fixtureMode: Boolean(resolvedConfig.fixtureMode),
     fixtureKind: resolvedConfig.fixtureKind,
     forkBlockNumber: resolvedConfig.forkBlockNumber?.toString(),
@@ -681,6 +684,12 @@ export async function buildMerchantMoeForkSimulationReport(
     simulation,
     findings,
   };
+  const liveCap = evaluateMerchantMoeLiveCaps(reportBase, env);
+  const report = {
+    ...reportBase,
+    executionEnabled: liveCap.executionEnabled,
+    liveCap,
+  };
 
   return {
     ...report,
@@ -693,6 +702,10 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     "[merchant-moe] mainnet-fork simulation",
     `ok: ${report.ok}`,
     `simulationMode: ${report.simulationMode}`,
+    `liveCapStatus: ${report.liveCap.status}`,
+    `liveCapEligible: ${report.liveCap.eligible}`,
+    `liveCapReason: ${report.liveCap.reason}`,
+    `executionEnabled: ${report.executionEnabled}`,
     `fixtureMode: ${report.fixtureMode}`,
     `fixtureKind: ${report.fixtureKind ?? "none"}`,
     `forkBlockNumber: ${report.forkBlockNumber ?? "none"}`,
@@ -733,6 +746,7 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     `vaultNonceBeforeSwap: ${report.vaultEvidence?.nonceBeforeSwap ?? "none"}`,
     `forkExecutionAttempted: ${report.forkExecution?.attempted ?? false}`,
     `forkExecutionPassed: ${report.forkExecution?.passed ?? false}`,
+    `forkExecutionVaultFunction: ${report.forkExecution?.vaultFunction ?? "none"}`,
     `forkExecutionTransaction: ${report.forkExecution?.transactionHash ?? "none"}`,
     `forkExecutionGasUsed: ${report.forkExecution?.gasUsed ?? "none"}`,
     `forkExecutionTokenOutDelta: ${report.forkExecution?.tokenOutDelta ?? "none"}`,
@@ -740,6 +754,14 @@ export function formatMerchantMoeForkSimulation(report: MerchantMoeForkSimulatio
     "findings:",
     ...(report.findings.length
       ? report.findings.map((finding) => `- ${finding.ruleId} [${finding.severity}]: ${finding.reason}`)
+      : ["- none"]),
+    "liveCapBlockers:",
+    ...(report.liveCap.blockers.length
+      ? report.liveCap.blockers.map((finding) => `- ${finding.ruleId}: ${finding.reason}`)
+      : ["- none"]),
+    "liveCapWarnings:",
+    ...(report.liveCap.warnings.length
+      ? report.liveCap.warnings.map((finding) => `- ${finding.ruleId}: ${finding.reason}`)
       : ["- none"]),
     "nextSteps:",
     ...report.nextSteps.map((step) => `- ${step}`),
@@ -758,7 +780,7 @@ export async function runMerchantMoeForkSimulation(
   const quote: MerchantMoeQuote = await adapter.quoteExactInput(quoteConfig);
   const readiness = await buildMerchantMoeForkReadinessReport(quote, quoteConfig, env);
   const simulationConfig = loadMerchantMoeForkSimulationConfig(env);
-  const report = await buildMerchantMoeForkSimulationReport(readiness, simulationConfig, client, quote);
+  const report = await buildMerchantMoeForkSimulationReport(readiness, simulationConfig, client, quote, env);
   write(formatMerchantMoeForkSimulation(report));
   try {
     await trace.append("merchant_moe.fork_simulation", {

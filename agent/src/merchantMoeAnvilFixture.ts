@@ -17,11 +17,12 @@ import {
   buildMerchantMoeForkSimulationReport,
   formatMerchantMoeForkSimulation,
   loadMerchantMoeForkSimulationConfig,
-  type ForkSimulationClient,
   type MerchantMoeForkExecutionEvidence,
+  type ForkSimulationClient,
   type MerchantMoeForkSimulationReport,
   type MerchantMoeVaultEvidence,
 } from "./merchantMoeForkSimulation.js";
+import { evaluateMerchantMoeLiveCaps } from "./merchantMoeLiveCaps.js";
 
 loadProjectEnv();
 import { buildMerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
@@ -610,6 +611,7 @@ async function executeForkSwap(
     return {
       attempted: true,
       passed,
+      vaultFunction: "executeGuarded",
       transactionHash: transaction.hash,
       gasUsed: transaction.receipt.gasUsed ? BigInt(transaction.receipt.gasUsed).toString() : undefined,
       agentDecisionEvents,
@@ -629,6 +631,7 @@ async function executeForkSwap(
     return {
       attempted: true,
       passed: false,
+      vaultFunction: "executeGuarded",
       agentDecisionEvents: 0,
       tokenInBefore: tokenInBefore.toString(),
       tokenOutBefore: tokenOutBefore.toString(),
@@ -835,6 +838,7 @@ export async function runMerchantMoeAnvilFixture(
       : {
           attempted: false,
           passed: false,
+          vaultFunction: "executeGuarded" as const,
           agentDecisionEvents: 0,
           reason: "fork execution skipped because simulation gate did not pass",
         };
@@ -845,7 +849,7 @@ export async function runMerchantMoeAnvilFixture(
           severity: "blocker" as const,
           reason: forkExecution.reason ?? "fork-only AgentVault execution failed",
         }];
-    const report: MerchantMoeForkSimulationReport = {
+    const reportBase: MerchantMoeForkSimulationReport = {
       ...simulationReport,
       ok: simulationReport.ok && forkExecution.passed,
       vaultEvidence,
@@ -861,6 +865,12 @@ export async function runMerchantMoeAnvilFixture(
             "Fix the fork-only AgentVault execution evidence before considering any live protocol path.",
             ...simulationReport.nextSteps,
           ],
+    };
+    const liveCap = evaluateMerchantMoeLiveCaps(reportBase, env);
+    const report: MerchantMoeForkSimulationReport = {
+      ...reportBase,
+      executionEnabled: liveCap.executionEnabled,
+      liveCap,
     };
     write(formatMerchantMoeForkSimulation(report));
     await appendTrace(trace, report);

@@ -98,6 +98,23 @@ interface MerchantMoeForkSimulationReport {
   ok?: boolean;
   fixtureMode?: boolean;
   fixtureKind?: "deterministic" | "anvil-mainnet-fork";
+  liveCap?: {
+    status?: "disabled" | "ready-disabled" | "eligible" | "blocked";
+    eligible?: boolean;
+    executionEnabled?: boolean;
+    reason?: string;
+    policy?: {
+      maxAmountInWei?: string | number;
+      maxSlippageBps?: string | number;
+      maxQuoteDeviationBps?: string | number;
+      maxAllowanceMultipleBps?: string | number;
+    };
+    blockers?: Array<{
+      ruleId?: string;
+      severity?: string;
+      reason?: string;
+    }>;
+  };
   forkBlockNumber?: string | number;
   setupTransactionHashes?: string[];
   executionEnabled?: boolean;
@@ -133,6 +150,7 @@ interface MerchantMoeForkSimulationReport {
   forkExecution?: {
     attempted?: boolean;
     passed?: boolean;
+    vaultFunction?: string;
     transactionHash?: string;
     gasUsed?: string | number;
     agentDecisionEvents?: string | number;
@@ -443,6 +461,8 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
       { label: "Gas", value: text(report.simulation?.gasEstimate) },
       { label: "Calldata bytes", value: text(report.calldataBytes) },
       { label: "Fork RPC", value: yesNo(report.forkRpcConfigured) },
+      { label: "Live cap", value: text(report.liveCap?.status, "not captured") },
+      { label: "Amount cap", value: text(report.liveCap?.policy?.maxAmountInWei) },
       { label: "Min out", value: text(report.minOutWei) },
       { label: "Slippage bps", value: text(report.slippageBps) },
       { label: "Vault", value: short(report.vaultEvidence?.address ?? report.vault) },
@@ -450,12 +470,14 @@ function forkSimulationItem(root: string, artifact: TraceArtifact, event: TraceE
         label: "Fork execution",
         value: report.forkExecution?.passed ? "passed" : report.forkExecution?.attempted ? "failed" : "not attempted",
       },
+      { label: "Vault function", value: text(report.forkExecution?.vaultFunction) },
       { label: "Fork gas", value: text(report.forkExecution?.gasUsed) },
       { label: "Output delta", value: text(report.forkExecution?.tokenOutDelta) },
       { label: "Decision events", value: text(report.forkExecution?.agentDecisionEvents) },
     ],
     findings: [
       ...findings.slice(0, 5).map(findingLabel),
+      ...(report.liveCap?.status === "blocked" ? (report.liveCap.blockers ?? []).slice(0, 3).map(findingLabel) : []),
       ...(revertReason ? [`Revert: ${revertReason}`] : []),
     ],
     nextSteps: (report.nextSteps ?? []).slice(0, 5),

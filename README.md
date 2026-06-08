@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/whoisgautxm/mantle-agentic-wallet/actions/workflows/ci.yml/badge.svg)](https://github.com/whoisgautxm/mantle-agentic-wallet/actions/workflows/ci.yml)
 ![Contracts](https://img.shields.io/badge/forge%20tests-40%2F40-brightgreen)
-![Agent](https://img.shields.io/badge/agent%20tests-149%2F149-brightgreen)
+![Agent](https://img.shields.io/badge/agent%20tests-210%2F210-brightgreen)
 ![OpenAI Eval](https://img.shields.io/badge/OpenAI%20replay-82%2F100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -34,6 +34,38 @@
 
 ![Dashboard preview](docs/reports/assets/submission-dashboard-preview.png)
 
+### June 8, 2026 20-Minute Harmony Run
+
+A final end-to-end smoke ran for exactly `1200s` with the dashboard, keeper, OpenAI-backed AI agent, DCA baseline, real Merchant Moe Anvil fork checks, adversarial fork checks, and offline evals all running together.
+
+| Component | Result |
+|---|---:|
+| Core checks | 4/4 passed |
+| Frontend health checks | 19/19 passed |
+| Demo runtime status checks | 19/19 passed |
+| Merchant Moe Anvil fork happy path | 18/18 passed |
+| Merchant Moe adversarial fork suite | 18/18 passed |
+| Trace eval cycles | 18/18 passed |
+| Scenario eval cycles | 18/18 passed |
+| Candidate-critic offline cycles | 9/9 passed |
+| Multi-regime offline cycles | 6/6 passed |
+| Failures | 0 |
+
+The dashboard was verified in-browser after the run. It showed the AI/Human replay, Merchant Moe fork evidence, `5/5 blocked safely`, `AgentVault.executeGuarded`, and `Live cap: ready-disabled`.
+
+The latest real-protocol trace evidence used a disposable Mantle mainnet Anvil fork at block `96382772`: the project deployed `AgentVault`, wrapped fork-only WMNT, approved exactly the bounded input amount, simulated `AgentVault.executeGuarded`, executed one fork-local Merchant Moe WMNT -> USDC swap, verified output delta `54153`, gas `176126`, nonce movement, and one emitted `AgentDecision`. The adversarial suite passed `5/5` at fork block `96382769`.
+
+No live Mantle mainnet Merchant Moe transaction was submitted. Live execution remains disabled unless the explicit bounded live-cap policy is enabled.
+
+The demo backend also ran during the window: the keeper moved MockDEX prices, the OpenAI-backed agent made decisions, and the baseline runner submitted Mantle Sepolia testnet actions. One AI execute candidate was approved by the model and then correctly blocked by deterministic post-model revalidation because price drift exceeded the `150 bps` safety limit.
+
+Run logs from the final validation:
+
+- `/tmp/turing-harmony-20min-20260608T045755Z.log`
+- `/tmp/turing-harmony-demo-20260608T045755Z.log`
+
+### June 7, 2026 Submission Replay
+
 The June 7, 2026 submission run used a real OpenAI agent on Mantle Sepolia and a deterministic DCA baseline over the same replay window:
 
 | Result | AI | DCA baseline |
@@ -48,8 +80,8 @@ The OpenAI replay judge scored the run **82/100** with **88 safety**, selected t
 
 Real-protocol evidence was also verified on disposable Mantle mainnet forks:
 
-- Merchant Moe WMNT -> USDC passed quote, bounded allowance, guard-required router, simulation, `AgentVault.executeGuarded`, output-delta, nonce, and `AgentDecision` checks at fork block `96340798`.
-- The adversarial fork suite passed `5/5` at block `96340791`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stopped before unsafe swap submission.
+- Merchant Moe WMNT -> USDC passes quote, bounded allowance, guard-required router, simulation, `AgentVault.executeGuarded`, output-delta, nonce, and `AgentDecision` checks on disposable Mantle mainnet forks.
+- The adversarial fork suite passes `5/5`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stop before unsafe swap submission.
 - Live Mantle mainnet execution remains deliberately disabled. The production-shaped path is proven on a fork without exposing real funds.
 
 ### Multi-Regime Generalization Check
@@ -246,10 +278,12 @@ Expected current results:
 
 | Suite | Command | Expected |
 |---|---|---|
-| Contracts | `cd contracts && forge test` | 26 passing |
-| Agent | `cd agent && npm test` | 148 passing |
+| Contracts | `cd contracts && forge test` | 40 passing |
+| Agent | `cd agent && npm test` | 210 passing |
 | Agent typecheck | `cd agent && npx tsc --noEmit` | clean |
-| Dashboard build | `cd web && npm run build` | clean |
+| Dashboard tests | `cd web && npm test` | 6 passing |
+| Dashboard typecheck | `cd web && npm run typecheck` | clean |
+| Dashboard build | `cd web && npm run build` | clean build; existing lint warnings only |
 
 ### Configure Environment
 
@@ -314,6 +348,16 @@ MERCHANT_MOE_SWAP_CALLDATA=
 MERCHANT_MOE_SWAP_RECIPIENT=
 MERCHANT_MOE_SWAP_DEADLINE=
 MERCHANT_MOE_SIMULATION_RATIONALE=Merchant Moe mainnet-fork simulation
+MERCHANT_MOE_LIVE_EXECUTION_ENABLED=false
+MERCHANT_MOE_LIVE_MAX_AMOUNT_IN_WEI=
+MERCHANT_MOE_LIVE_MAX_SLIPPAGE_BPS=100
+MERCHANT_MOE_LIVE_MAX_DEVIATION_BPS=300
+MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS=10000
+MERCHANT_MOE_LIVE_REQUIRE_ANVIL_FORK_PASS=true
+MERCHANT_MOE_LIVE_REQUIRE_GUARDED_VAULT=true
+MERCHANT_MOE_LIVE_REQUIRE_AUTO_CALLDATA=true
+MERCHANT_MOE_LIVE_REQUIRE_BOUNDED_ALLOWANCE=true
+MERCHANT_MOE_LIVE_REQUIRE_ZERO_NATIVE_VALUE=true
 MERCHANT_MOE_TOKEN_IN_DECIMALS=
 MERCHANT_MOE_TOKEN_OUT_DECIMALS=
 MERCHANT_MOE_REFERENCE_SOURCE=
@@ -394,6 +438,8 @@ npm run simulate:merchant-moe-anvil
 ```
 
 This command starts a disposable Anvil fork of Mantle mainnet, verifies bytecode for WMNT, LBQuoter, and LBRouter, compiles and deploys the real project `AgentVault`, and configures its target allowlist. The vault wraps fork-only MNT, grants an exact bounded WMNT approval, simulates `AgentVault.executeGuarded` against Merchant Moe, then executes one guarded swap only on the disposable fork. The report verifies output balance delta, vault nonce, gas, and the emitted `AgentDecision` event. It records the fork block and setup transaction hashes, writes `fixtureKind: anvil-mainnet-fork`, stops Anvil automatically, and never submits anything to Mantle mainnet.
+
+The Anvil report also evaluates the bounded live-cap policy. `ready-disabled` means all caps passed but `MERCHANT_MOE_LIVE_EXECUTION_ENABLED=false`; `blocked` means at least one explicit cap or safety prerequisite failed. Live eligibility requires the Anvil fork pass, `AgentVault.executeGuarded`, code-built calldata, bounded allowance, zero native router value, amount/slippage/deviation caps, and passing quote/risk/preflight evidence. This policy is evidence only; the current project does not submit live Merchant Moe mainnet swaps.
 
 Lending/yield settings are also read-only. They let the project model Lendle/INIT-style health-factor risk from a local snapshot before any supply, withdraw, borrow, or repay execution exists.
 
