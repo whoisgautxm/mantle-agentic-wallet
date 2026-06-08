@@ -1,4 +1,4 @@
-export type MerchantMoeReferenceSource = "none" | "manual" | "pyth-mnt-usd";
+type MerchantMoeReferenceSource = "none" | "manual" | "pyth-mnt-usd";
 
 export interface MerchantMoeTokenConfig {
   symbol: "WMNT" | "USDC" | "USDT" | "USDe" | "MOE";
@@ -54,7 +54,7 @@ export const MERCHANT_MOE_TOKENS = {
 
 const oneTenthMnt = 10n ** 17n;
 
-export const MERCHANT_MOE_ROUTE_PRESETS = {
+const MERCHANT_MOE_ROUTE_PRESETS = {
   "wmnt-usdc-direct": {
     id: "wmnt-usdc-direct",
     label: "WMNT -> USDC direct",

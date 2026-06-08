@@ -1,6 +1,6 @@
 export type LendingProtocolId = "lendle" | "init" | "custom";
-export type LendingHealthStatus = "healthy" | "watch" | "blocked";
-export type LendingFindingSeverity = "warning" | "blocker" | "critical";
+type LendingHealthStatus = "healthy" | "watch" | "blocked";
+type LendingFindingSeverity = "warning" | "blocker" | "critical";
 
 export interface LendingAssetPosition {
   symbol: string;

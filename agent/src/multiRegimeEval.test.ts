@@ -35,7 +35,7 @@ const fixture: MultiRegimeFixture = {
 describe("multi-regime benchmark", () => {
   it("runs decisions without exposing future prices and deducts transaction costs", async () => {
     const historyLengths: number[] = [];
-    const runner: BenchmarkDecisionRunner = async ({ tickIndex, state, priceHistory, adapter }) => {
+    const runner: BenchmarkDecisionRunner = async ({ tickIndex, priceHistory, adapter }) => {
       historyLengths.push(priceHistory.length);
       if (tickIndex !== 1) return { kind: "hold", rationale: "wait" };
       const intent = { action: "buy" as const, amountMntWei: 5n * 10n ** 16n, rationale: "buy dip" };

@@ -26,7 +26,7 @@ export const LB_ROUTER_SWAP_ABI = [
   },
 ] as const;
 
-export interface MerchantMoeSwapPath {
+interface MerchantMoeSwapPath {
   tokenPath: readonly `0x${string}`[];
   pairBinSteps: readonly bigint[];
   versions: readonly number[];

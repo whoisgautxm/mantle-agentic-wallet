@@ -34,20 +34,20 @@ export interface PortfolioToken {
   pricePair?: string;
 }
 
-export interface PortfolioSpender {
+interface PortfolioSpender {
   name: string;
   address: `0x${string}`;
   riskTier: string;
 }
 
-export interface BalanceRow {
+interface BalanceRow {
   vaultName: string;
   vault: `0x${string}`;
   token: PortfolioToken;
   balanceRaw: bigint;
 }
 
-export interface AllowanceRow {
+interface AllowanceRow {
   vaultName: string;
   vault: `0x${string}`;
   token: PortfolioToken;
@@ -73,7 +73,7 @@ function asAddress(value: string, label: string): `0x${string}` {
   return value as `0x${string}`;
 }
 
-export function parsePortfolioTokens(raw = process.env.PORTFOLIO_TOKENS ?? ""): PortfolioToken[] {
+function parsePortfolioTokens(raw = process.env.PORTFOLIO_TOKENS ?? ""): PortfolioToken[] {
   if (!raw.trim()) return [];
   return raw
     .split(",")
@@ -95,7 +95,7 @@ export function parsePortfolioTokens(raw = process.env.PORTFOLIO_TOKENS ?? ""): 
     });
 }
 
-export function parsePortfolioSpenders(raw = process.env.PORTFOLIO_SPENDERS ?? ""): PortfolioSpender[] {
+function parsePortfolioSpenders(raw = process.env.PORTFOLIO_SPENDERS ?? ""): PortfolioSpender[] {
   if (!raw.trim()) return [];
   return raw
     .split(",")

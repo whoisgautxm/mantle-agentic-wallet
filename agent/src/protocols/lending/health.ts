@@ -32,15 +32,15 @@ function finding(
   return { ruleId, severity, reason };
 }
 
-export function suppliedValueWei(position: LendingPositionSnapshot): bigint {
+function suppliedValueWei(position: LendingPositionSnapshot): bigint {
   return sum(position.assets.map((asset) => asset.suppliedValueWei));
 }
 
-export function debtValueWei(position: LendingPositionSnapshot): bigint {
+function debtValueWei(position: LendingPositionSnapshot): bigint {
   return sum(position.assets.map((asset) => asset.debtValueWei));
 }
 
-export function collateralAtThresholdWei(position: LendingPositionSnapshot): bigint {
+function collateralAtThresholdWei(position: LendingPositionSnapshot): bigint {
   return sum(position.assets.map((asset) => (asset.suppliedValueWei * asset.liquidationThresholdBps) / BPS));
 }
 

@@ -1,16 +1,10 @@
-import type { TokenBalance } from "./types.js";
-
-export function scale10(decimals: number): bigint {
+function scale10(decimals: number): bigint {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) throw new Error("invalid token decimals");
   return 10n ** BigInt(decimals);
 }
 
 export function tokenValueWei(balanceRaw: bigint, tokenPriceWei: bigint, tokenDecimals: number): bigint {
   return (balanceRaw * tokenPriceWei) / scale10(tokenDecimals);
-}
-
-export function tokenBalanceValueWei(balance: TokenBalance, tokenPriceWei: bigint): bigint {
-  return tokenValueWei(balance.balanceRaw, tokenPriceWei, balance.token.decimals);
 }
 
 export function exposureBps(positionValueWei: bigint, portfolioValueWei: bigint): bigint {

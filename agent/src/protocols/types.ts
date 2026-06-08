@@ -1,7 +1,6 @@
 import type { Decision } from "../types.js";
 
 export type ProtocolAction = "buy" | "sell";
-export type ProtocolMode = "execution" | "read-only";
 
 export interface TradeIntent {
   action: ProtocolAction;

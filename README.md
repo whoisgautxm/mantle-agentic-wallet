@@ -234,7 +234,6 @@ Together, these events form a replayable benchmark: what the agent saw, what it 
 │   ├── src/AgentVault.sol        # guarded agent wallet
 │   ├── src/MockDEX.sol           # executable demo trading venue
 │   ├── src/MockToken.sol         # ERC20 output asset for guarded settlement
-│   ├── src/PaymentSink.sol       # legacy simple-payment demo target
 │   ├── test/AgentVault.t.sol
 │   ├── test/MockDEX.t.sol
 │   └── script/Deploy.s.sol       # deploys MockDEX + AI/baseline vaults
@@ -576,7 +575,6 @@ Copy the printed values into `shared/addresses.json`:
 {
   "chainId": 5003,
   "agentVault": "0x...",
-  "paymentSink": "0x0000000000000000000000000000000000000000",
   "mockDex": "0x...",
   "mockToken": "0x...",
   "aiVault": "0x...",

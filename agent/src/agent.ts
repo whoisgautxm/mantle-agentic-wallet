@@ -219,7 +219,6 @@ type RevalidationResult =
     };
 
 async function revalidateCandidateDecision(
-  tickId: string,
   originalDecision: ExecuteDecision,
   originalState: VaultState,
   originalOracle: Awaited<ReturnType<typeof oracleRouter.getPrice>>,
@@ -483,7 +482,7 @@ async function tick(tickId: string, context: string): Promise<void> {
     return;
   }
 
-  const revalidation = await revalidateCandidateDecision(tickId, decision, state, oracle, portfolio, tracedProtocol);
+  const revalidation = await revalidateCandidateDecision(decision, state, oracle, portfolio, tracedProtocol);
   await recordTrace("agent.candidate_revalidation", {
     tickId,
     runner: "ai",

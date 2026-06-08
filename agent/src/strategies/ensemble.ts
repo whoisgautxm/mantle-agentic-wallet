@@ -44,7 +44,7 @@ export interface EnsembleConfig {
   recoveryProbePercent: number;
 }
 
-export const DEFAULT_ENSEMBLE_CONFIG: EnsembleConfig = {
+const DEFAULT_ENSEMBLE_CONFIG: EnsembleConfig = {
   minimumConfidence: DEFAULT_MIN_CONFIDENCE,
   edgeBufferBps: DEFAULT_EDGE_BUFFER_BPS,
   trendBuyMinPercent: 50,

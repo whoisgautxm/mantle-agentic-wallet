@@ -2,7 +2,7 @@ import addresses from "../../shared/addresses.json";
 import type { PortfolioStatus } from "./portfolio";
 import type { StatusResult } from "./status";
 
-export type ReadinessKind = "ok" | "warn" | "bad";
+type ReadinessKind = "ok" | "warn" | "bad";
 
 export interface ProtocolReadinessItem {
   name: string;

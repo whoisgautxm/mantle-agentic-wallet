@@ -4,7 +4,7 @@
 // no lookahead) so the ensemble can take a small, cost-aware recovery probe when a downtrend
 // stabilizes and bounces — the upside the AI previously left entirely to DCA.
 
-export type RecoveryPhase = "neutral" | "downtrend" | "stabilizing" | "recovery_probe";
+type RecoveryPhase = "neutral" | "downtrend" | "stabilizing" | "recovery_probe";
 
 export interface RecoveryConfig {
   minObservations: number;
@@ -12,7 +12,7 @@ export interface RecoveryConfig {
   recoveryBounceBps: number; // how far price has reclaimed off the low to call it a probe
 }
 
-export const DEFAULT_RECOVERY_CONFIG: RecoveryConfig = {
+const DEFAULT_RECOVERY_CONFIG: RecoveryConfig = {
   minObservations: 4,
   minDrawdownBps: 300,
   recoveryBounceBps: 150,

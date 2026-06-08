@@ -65,7 +65,7 @@ export function pythPriceToMntPerUsdWei(price: PythPriceInput): bigint {
   return (ONE * ONE) / usdPerMntWei;
 }
 
-export function pythConfidenceToMntPerUsdWei(price: PythPriceInput): bigint {
+function pythConfidenceToMntPerUsdWei(price: PythPriceInput): bigint {
   const rawConf = BigInt(price.conf);
   if (rawConf <= 0n) return 0n;
   const usdConfWei = scaleToE18(rawConf, price.expo);

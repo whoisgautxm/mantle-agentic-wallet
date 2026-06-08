@@ -2,9 +2,9 @@ import { readFile, stat } from "fs/promises";
 import path from "path";
 import { protocolEvidenceSnapshot } from "./protocolEvidenceSnapshot";
 
-export type ProtocolEvidenceStatus = "ok" | "warn" | "bad";
+type ProtocolEvidenceStatus = "ok" | "warn" | "bad";
 
-export interface ProtocolEvidenceMetric {
+interface ProtocolEvidenceMetric {
   label: string;
   value: string;
 }

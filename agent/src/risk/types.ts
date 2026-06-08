@@ -15,7 +15,7 @@ export interface RiskInput {
   limits?: RiskLimits;
 }
 
-export interface RiskWarning {
+interface RiskWarning {
   ruleId: string;
   message: string;
 }

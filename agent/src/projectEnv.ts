@@ -2,7 +2,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { config as loadDotenv } from "dotenv";
 
-export function resolveProjectRoot(cwd = process.cwd()): string {
+function resolveProjectRoot(cwd = process.cwd()): string {
   if (path.basename(cwd) === "agent" && existsSync(path.join(cwd, "package.json"))) {
     return path.dirname(cwd);
   }

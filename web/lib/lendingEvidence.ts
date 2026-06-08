@@ -1,9 +1,9 @@
 import { readFile, stat } from "fs/promises";
 import path from "path";
 
-export type LendingEvidenceStatus = "ok" | "warn" | "bad";
+type LendingEvidenceStatus = "ok" | "warn" | "bad";
 
-export interface LendingEvidenceMetric {
+interface LendingEvidenceMetric {
   label: string;
   value: string;
 }

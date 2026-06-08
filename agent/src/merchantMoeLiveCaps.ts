@@ -1,16 +1,16 @@
-export type MerchantMoeLiveCapStatus =
+type MerchantMoeLiveCapStatus =
   | "disabled"
   | "ready-disabled"
   | "eligible"
   | "blocked";
 
-export interface MerchantMoeLiveCapFinding {
+interface MerchantMoeLiveCapFinding {
   ruleId: string;
   severity: "warning" | "blocker";
   reason: string;
 }
 
-export interface MerchantMoeLiveCapPolicy {
+interface MerchantMoeLiveCapPolicy {
   executionSwitchEnabled: boolean;
   maxAmountInWei?: string;
   maxSlippageBps?: string;

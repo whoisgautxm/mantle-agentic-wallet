@@ -1,4 +1,4 @@
-export type PriceSource = "mockdex" | "pyth";
+type PriceSource = "mockdex" | "pyth";
 
 export interface PriceSnapshot {
   pair: string;

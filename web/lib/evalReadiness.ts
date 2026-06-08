@@ -5,9 +5,9 @@ import openAiReplaySnapshot from "../data/latest-openai-replay-eval.json";
 import scenarioSnapshot from "../data/latest-scenario-summary.json";
 import traceSnapshot from "../data/latest-trace-summary.json";
 
-export type EvalReadinessStatus = "ok" | "warn" | "bad";
+type EvalReadinessStatus = "ok" | "warn" | "bad";
 
-export interface EvalReadinessMetric {
+interface EvalReadinessMetric {
   label: string;
   value: string;
 }

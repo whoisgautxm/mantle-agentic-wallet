@@ -15,12 +15,6 @@ export interface SpenderInfo {
   riskTier: "trusted" | "known" | "experimental";
 }
 
-export interface TokenBalance {
-  token: TokenInfo;
-  owner: `0x${string}`;
-  balanceRaw: bigint;
-}
-
 export type AllowanceStatus = "none" | "bounded" | "excessive" | "unbounded";
 
 export interface AllowanceInfo {

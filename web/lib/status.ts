@@ -46,7 +46,7 @@ const VAULT_ABI = [
   },
 ] as const;
 
-export interface RiskConfig {
+interface RiskConfig {
   maxDexOracleDeviationBps: bigint;
   maxPositionBps: bigint;
   maxTradeValueBps: bigint;
@@ -68,7 +68,7 @@ export interface VaultStatus {
   dexGuarded: boolean;
 }
 
-export interface LiveStatus {
+interface LiveStatus {
   ok: true;
   oracle: {
     pair: string;
@@ -157,7 +157,7 @@ function envBps(name: string, fallback: bigint): bigint {
   return value > 10_000n ? fallback : value;
 }
 
-export function readRiskConfig(): RiskConfig {
+function readRiskConfig(): RiskConfig {
   return {
     maxDexOracleDeviationBps: envBps("RISK_MAX_DEX_ORACLE_DEVIATION_BPS", 300n),
     maxPositionBps: envBps("RISK_MAX_POSITION_BPS", 7_000n),

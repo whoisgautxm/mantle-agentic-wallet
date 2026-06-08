@@ -21,7 +21,7 @@ const WEI_PER_ETHER = 10n ** 18n;
 const REGIMES: MarketRegime[] = ["trend_up", "trend_down", "range", "shock", "uncertain"];
 const VETO_CODES = ["none", "state_inconsistency", "regime_conflict", "evidence_insufficient", "tail_risk"] as const;
 
-export const PROPOSE_ACTION_TOOL = {
+const PROPOSE_ACTION_TOOL = {
   name: "propose_action",
   description:
     "Propose the agent's next DEX trade: buy tokens with MNT, sell tokens for MNT, or hold. " +
@@ -187,7 +187,7 @@ export interface CandidateAssessment {
   rationale: string;
 }
 
-export interface CandidateAssessmentValidation {
+interface CandidateAssessmentValidation {
   ok: boolean;
   reason?: string;
   finalVerdict: "approved" | "vetoed" | "invalid_veto_ignored" | "invalid_approval_logged";
@@ -545,7 +545,7 @@ function assessmentText(assessment: CandidateAssessment): string {
   return [assessment.rationale, ...assessment.evidence].join(" ").toLowerCase();
 }
 
-export function validateCandidateAssessment(
+function validateCandidateAssessment(
   assessment: CandidateAssessment,
   candidate: TradeCandidate,
   state: VaultState,

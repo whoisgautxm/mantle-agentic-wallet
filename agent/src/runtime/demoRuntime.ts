@@ -14,15 +14,15 @@ export interface DemoProcessRecord {
   port?: number;
 }
 
-export function runtimeDir(repoRoot: string): string {
+function runtimeDir(repoRoot: string): string {
   return path.join(repoRoot, ".runtime");
 }
 
-export function recordPath(repoRoot: string, component: DemoComponent): string {
+function recordPath(repoRoot: string, component: DemoComponent): string {
   return path.join(runtimeDir(repoRoot), `demo-${component}.json`);
 }
 
-export async function ensureRuntimeDir(repoRoot: string): Promise<void> {
+async function ensureRuntimeDir(repoRoot: string): Promise<void> {
   await mkdir(runtimeDir(repoRoot), { recursive: true });
 }
 

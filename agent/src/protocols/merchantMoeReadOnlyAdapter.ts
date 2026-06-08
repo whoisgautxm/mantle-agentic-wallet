@@ -13,7 +13,7 @@ export const MERCHANT_MOE_MANTLE = {
   lbFactory: "0xa6630671775c4EA2743840F9A5016dCf2A104054" as const,
 };
 
-export const LB_QUOTER_ABI = [
+const LB_QUOTER_ABI = [
   {
     type: "function",
     name: "findBestPathFromAmountIn",
@@ -47,7 +47,7 @@ export interface MerchantMoeConfig {
   rpcUrl?: string;
 }
 
-export interface MerchantMoeQuoteInput {
+interface MerchantMoeQuoteInput {
   route: readonly `0x${string}`[];
   amountIn: bigint;
 }
