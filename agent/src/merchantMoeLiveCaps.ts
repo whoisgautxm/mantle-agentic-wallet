@@ -1,4 +1,8 @@
-export type MerchantMoeLiveCapStatus = "disabled" | "ready-disabled" | "eligible" | "blocked";
+export type MerchantMoeLiveCapStatus =
+  | "disabled"
+  | "ready-disabled"
+  | "eligible"
+  | "blocked";
 
 export interface MerchantMoeLiveCapFinding {
   ruleId: string;
@@ -75,16 +79,24 @@ function parseBoolean(raw: string | undefined, fallback: boolean): boolean {
   throw new Error(`expected boolean value, received ${raw}`);
 }
 
-function parseOptionalUnsigned(raw: string | undefined, label: string): bigint | undefined {
+function parseOptionalUnsigned(
+  raw: string | undefined,
+  label: string,
+): bigint | undefined {
   if (!raw?.trim()) return undefined;
-  if (!/^\d+$/.test(raw.trim())) throw new Error(`${label} must be a non-negative integer`);
+  if (!/^\d+$/.test(raw.trim()))
+    throw new Error(`${label} must be a non-negative integer`);
   return BigInt(raw.trim());
 }
 
-function parseReportUnsigned(raw: string | number | bigint | undefined, label: string): bigint | undefined {
+function parseReportUnsigned(
+  raw: string | number | bigint | undefined,
+  label: string,
+): bigint | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const value = String(raw);
-  if (!/^\d+$/.test(value)) throw new Error(`${label} must be a non-negative integer`);
+  if (!/^\d+$/.test(value))
+    throw new Error(`${label} must be a non-negative integer`);
   return BigInt(value);
 }
 
@@ -102,27 +114,53 @@ function parsePolicy(env: NodeJS.ProcessEnv): MerchantMoeLiveCapPolicy {
     "MERCHANT_MOE_LIVE_MAX_DEVIATION_BPS",
   );
   const maxAllowanceMultipleBps =
-    parseOptionalUnsigned(env.MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS, "MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS") ??
-    10_000n;
+    parseOptionalUnsigned(
+      env.MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS,
+      "MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS",
+    ) ?? 10_000n;
   if (maxAllowanceMultipleBps <= 0n) {
-    throw new Error("MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS must be positive");
+    throw new Error(
+      "MERCHANT_MOE_LIVE_MAX_ALLOWANCE_MULTIPLE_BPS must be positive",
+    );
   }
 
   return {
-    executionSwitchEnabled: parseBoolean(env.MERCHANT_MOE_LIVE_EXECUTION_ENABLED, false),
+    executionSwitchEnabled: parseBoolean(
+      env.MERCHANT_MOE_LIVE_EXECUTION_ENABLED,
+      false,
+    ),
     maxAmountInWei: maxAmountInWei?.toString(),
     maxSlippageBps: maxSlippageBps?.toString(),
     maxQuoteDeviationBps: maxQuoteDeviationBps?.toString(),
     maxAllowanceMultipleBps: maxAllowanceMultipleBps.toString(),
-    requireAnvilForkPass: parseBoolean(env.MERCHANT_MOE_LIVE_REQUIRE_ANVIL_FORK_PASS, true),
-    requireGuardedVaultExecution: parseBoolean(env.MERCHANT_MOE_LIVE_REQUIRE_GUARDED_VAULT, true),
-    requireAutoCalldata: parseBoolean(env.MERCHANT_MOE_LIVE_REQUIRE_AUTO_CALLDATA, true),
-    requireBoundedAllowance: parseBoolean(env.MERCHANT_MOE_LIVE_REQUIRE_BOUNDED_ALLOWANCE, true),
-    requireZeroNativeValue: parseBoolean(env.MERCHANT_MOE_LIVE_REQUIRE_ZERO_NATIVE_VALUE, true),
+    requireAnvilForkPass: parseBoolean(
+      env.MERCHANT_MOE_LIVE_REQUIRE_ANVIL_FORK_PASS,
+      true,
+    ),
+    requireGuardedVaultExecution: parseBoolean(
+      env.MERCHANT_MOE_LIVE_REQUIRE_GUARDED_VAULT,
+      true,
+    ),
+    requireAutoCalldata: parseBoolean(
+      env.MERCHANT_MOE_LIVE_REQUIRE_AUTO_CALLDATA,
+      true,
+    ),
+    requireBoundedAllowance: parseBoolean(
+      env.MERCHANT_MOE_LIVE_REQUIRE_BOUNDED_ALLOWANCE,
+      true,
+    ),
+    requireZeroNativeValue: parseBoolean(
+      env.MERCHANT_MOE_LIVE_REQUIRE_ZERO_NATIVE_VALUE,
+      true,
+    ),
   };
 }
 
-function finding(ruleId: string, reason: string, severity: "warning" | "blocker" = "blocker"): MerchantMoeLiveCapFinding {
+function finding(
+  ruleId: string,
+  reason: string,
+  severity: "warning" | "blocker" = "blocker",
+): MerchantMoeLiveCapFinding {
   return { ruleId, severity, reason };
 }
 
@@ -134,16 +172,31 @@ function compareCap(
   capEnvName: string,
 ): void {
   if (reportValue === undefined) {
-    blockers.push(finding(`${reportLabel.toUpperCase()}_MISSING`, `${reportLabel} was not captured in the fork report.`));
+    blockers.push(
+      finding(
+        `${reportLabel.toUpperCase()}_MISSING`,
+        `${reportLabel} was not captured in the fork report.`,
+      ),
+    );
     return;
   }
   if (capValue === undefined) {
-    blockers.push(finding(`${capEnvName}_MISSING`, `Set ${capEnvName} before enabling bounded live Merchant Moe execution.`));
+    blockers.push(
+      finding(
+        `${capEnvName}_MISSING`,
+        `Set ${capEnvName} before enabling bounded live Merchant Moe execution.`,
+      ),
+    );
     return;
   }
   const cap = BigInt(capValue);
   if (reportValue > cap) {
-    blockers.push(finding(`${capEnvName}_EXCEEDED`, `${reportLabel} ${reportValue} exceeds cap ${cap}.`));
+    blockers.push(
+      finding(
+        `${capEnvName}_EXCEEDED`,
+        `${reportLabel} ${reportValue} exceeds cap ${cap}.`,
+      ),
+    );
   }
 }
 
@@ -151,14 +204,27 @@ function optionalQuoteDeviationCap(
   report: MerchantMoeLiveCapReportInput,
   policy: MerchantMoeLiveCapPolicy,
 ): string | undefined {
-  return policy.maxQuoteDeviationBps ?? report.quoteRisk?.maxDeviationBps?.toString();
+  return (
+    policy.maxQuoteDeviationBps ?? report.quoteRisk?.maxDeviationBps?.toString()
+  );
 }
 
-function reason(status: MerchantMoeLiveCapStatus, blockers: readonly MerchantMoeLiveCapFinding[]): string {
-  if (status === "eligible") return "Bounded live-cap policy is enabled and every cap passed.";
-  if (status === "ready-disabled") return "All bounded live caps passed, but MERCHANT_MOE_LIVE_EXECUTION_ENABLED is false.";
-  if (status === "blocked") return blockers[0]?.reason ?? "Live execution is blocked by bounded cap policy.";
-  return blockers[0]?.reason ?? "Live execution is disabled until bounded caps and fork evidence pass.";
+function reason(
+  status: MerchantMoeLiveCapStatus,
+  blockers: readonly MerchantMoeLiveCapFinding[],
+): string {
+  if (status === "eligible")
+    return "Bounded live-cap policy is enabled and every cap passed.";
+  if (status === "ready-disabled")
+    return "All bounded live caps passed, but MERCHANT_MOE_LIVE_EXECUTION_ENABLED is false.";
+  if (status === "blocked")
+    return (
+      blockers[0]?.reason ?? "Live execution is blocked by bounded cap policy."
+    );
+  return (
+    blockers[0]?.reason ??
+    "Live execution is disabled until bounded caps and fork evidence pass."
+  );
 }
 
 export function evaluateMerchantMoeLiveCaps(
@@ -170,12 +236,26 @@ export function evaluateMerchantMoeLiveCaps(
   const warnings: MerchantMoeLiveCapFinding[] = [];
 
   if (!report.ok) {
-    blockers.push(finding("LIVE_CAP_REPORT_NOT_OK", "The Merchant Moe fork report is not green."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_REPORT_NOT_OK",
+        "The Merchant Moe fork report is not green.",
+      ),
+    );
   }
   if (!report.simulationPassed) {
-    blockers.push(finding("LIVE_CAP_SIMULATION_NOT_PASSED", "AgentVault simulation must pass before live eligibility."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_SIMULATION_NOT_PASSED",
+        "AgentVault simulation must pass before live eligibility.",
+      ),
+    );
   }
-  if (policy.requireAnvilForkPass && (report.fixtureKind !== "anvil-mainnet-fork" || report.forkExecution?.passed !== true)) {
+  if (
+    policy.requireAnvilForkPass &&
+    (report.fixtureKind !== "anvil-mainnet-fork" ||
+      report.forkExecution?.passed !== true)
+  ) {
     blockers.push(
       finding(
         "LIVE_CAP_ANVIL_FORK_EXECUTION_REQUIRED",
@@ -185,47 +265,119 @@ export function evaluateMerchantMoeLiveCaps(
   }
   if (policy.requireGuardedVaultExecution) {
     if (report.simulationMode !== "vault-execute") {
-      blockers.push(finding("LIVE_CAP_VAULT_MODE_REQUIRED", "Live eligibility requires vault-execute simulation mode."));
+      blockers.push(
+        finding(
+          "LIVE_CAP_VAULT_MODE_REQUIRED",
+          "Live eligibility requires vault-execute simulation mode.",
+        ),
+      );
     }
     if (report.forkExecution?.vaultFunction !== "executeGuarded") {
-      blockers.push(finding("LIVE_CAP_GUARDED_EXECUTION_REQUIRED", "Merchant Moe router swaps must use AgentVault.executeGuarded."));
+      blockers.push(
+        finding(
+          "LIVE_CAP_GUARDED_EXECUTION_REQUIRED",
+          "Merchant Moe router swaps must use AgentVault.executeGuarded.",
+        ),
+      );
     }
   }
   if (policy.requireAutoCalldata && report.calldataSource !== "auto") {
-    blockers.push(finding("LIVE_CAP_AUTO_CALLDATA_REQUIRED", "Live eligibility requires code-built calldata, not model/env-authored bytes."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_AUTO_CALLDATA_REQUIRED",
+        "Live eligibility requires code-built calldata, not model/env-authored bytes.",
+      ),
+    );
   }
   if (policy.requireZeroNativeValue) {
     const valueWei = parseReportUnsigned(report.valueWei, "valueWei") ?? 0n;
     if (valueWei !== 0n) {
-      blockers.push(finding("LIVE_CAP_ZERO_NATIVE_VALUE_REQUIRED", `Merchant Moe WMNT router swaps must send valueWei=0, saw ${valueWei}.`));
+      blockers.push(
+        finding(
+          "LIVE_CAP_ZERO_NATIVE_VALUE_REQUIRED",
+          `Merchant Moe WMNT router swaps must send valueWei=0, saw ${valueWei}.`,
+        ),
+      );
     }
   }
 
   const amountIn = parseReportUnsigned(report.amountIn, "amountIn");
   const slippageBps = parseReportUnsigned(report.slippageBps, "slippageBps");
-  const deviationBps = parseReportUnsigned(report.quoteRisk?.deviationBps, "quoteRisk.deviationBps");
+  const deviationBps = parseReportUnsigned(
+    report.quoteRisk?.deviationBps,
+    "quoteRisk.deviationBps",
+  );
   const maxQuoteDeviationBps = optionalQuoteDeviationCap(report, policy);
-  compareCap(blockers, amountIn, policy.maxAmountInWei, "amountIn", "MERCHANT_MOE_LIVE_MAX_AMOUNT_IN_WEI");
-  compareCap(blockers, slippageBps, policy.maxSlippageBps, "slippageBps", "MERCHANT_MOE_LIVE_MAX_SLIPPAGE_BPS");
-  compareCap(blockers, deviationBps, maxQuoteDeviationBps, "quoteDeviationBps", "MERCHANT_MOE_LIVE_MAX_DEVIATION_BPS");
+  compareCap(
+    blockers,
+    amountIn,
+    policy.maxAmountInWei,
+    "amountIn",
+    "MERCHANT_MOE_LIVE_MAX_AMOUNT_IN_WEI",
+  );
+  compareCap(
+    blockers,
+    slippageBps,
+    policy.maxSlippageBps,
+    "slippageBps",
+    "MERCHANT_MOE_LIVE_MAX_SLIPPAGE_BPS",
+  );
+  compareCap(
+    blockers,
+    deviationBps,
+    maxQuoteDeviationBps,
+    "quoteDeviationBps",
+    "MERCHANT_MOE_LIVE_MAX_DEVIATION_BPS",
+  );
 
   if (report.quoteRisk?.status !== "ok") {
-    blockers.push(finding("LIVE_CAP_QUOTE_RISK_NOT_OK", report.quoteRisk?.reason ?? "Quote/reference risk check must be ok."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_QUOTE_RISK_NOT_OK",
+        report.quoteRisk?.reason ?? "Quote/reference risk check must be ok.",
+      ),
+    );
   }
   if (report.preflight?.balanceOk !== true) {
-    blockers.push(finding("LIVE_CAP_BALANCE_NOT_OK", "Token-in balance preflight must pass."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_BALANCE_NOT_OK",
+        "Token-in balance preflight must pass.",
+      ),
+    );
   }
   if (report.preflight?.allowanceOk !== true) {
-    blockers.push(finding("LIVE_CAP_ALLOWANCE_NOT_OK", "Router allowance preflight must pass."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_ALLOWANCE_NOT_OK",
+        "Router allowance preflight must pass.",
+      ),
+    );
   }
-  if (policy.requireBoundedAllowance && report.preflight?.allowanceStatus !== "bounded") {
-    blockers.push(finding("LIVE_CAP_BOUNDED_ALLOWANCE_REQUIRED", "Router allowance must be bounded, not missing/excessive/unbounded."));
+  if (
+    policy.requireBoundedAllowance &&
+    report.preflight?.allowanceStatus !== "bounded"
+  ) {
+    blockers.push(
+      finding(
+        "LIVE_CAP_BOUNDED_ALLOWANCE_REQUIRED",
+        "Router allowance must be bounded, not missing/excessive/unbounded.",
+      ),
+    );
   }
 
-  const allowanceRaw = parseReportUnsigned(report.preflight?.allowanceRaw, "allowanceRaw");
-  const requiredAmount = parseReportUnsigned(report.preflight?.requiredAmountIn, "requiredAmountIn") ?? amountIn;
+  const allowanceRaw = parseReportUnsigned(
+    report.preflight?.allowanceRaw,
+    "allowanceRaw",
+  );
+  const requiredAmount =
+    parseReportUnsigned(
+      report.preflight?.requiredAmountIn,
+      "requiredAmountIn",
+    ) ?? amountIn;
   if (allowanceRaw !== undefined && requiredAmount !== undefined) {
-    const maxAllowance = (requiredAmount * BigInt(policy.maxAllowanceMultipleBps)) / 10_000n;
+    const maxAllowance =
+      (requiredAmount * BigInt(policy.maxAllowanceMultipleBps)) / 10_000n;
     if (allowanceRaw > maxAllowance) {
       blockers.push(
         finding(
@@ -237,22 +389,64 @@ export function evaluateMerchantMoeLiveCaps(
   }
 
   if (report.vaultEvidence?.paused !== false) {
-    blockers.push(finding("LIVE_CAP_VAULT_PAUSED_OR_UNKNOWN", "Vault must be unpaused in fork evidence."));
+    blockers.push(
+      finding(
+        "LIVE_CAP_VAULT_PAUSED_OR_UNKNOWN",
+        "Vault must be unpaused in fork evidence.",
+      ),
+    );
   }
-  if (report.vaultEvidence?.tokenAllowed !== true || report.vaultEvidence?.routerAllowed !== true) {
-    blockers.push(finding("LIVE_CAP_VAULT_TARGETS_NOT_ALLOWED", "Vault must allow the token setup target and Merchant Moe router."));
+  if (
+    report.vaultEvidence?.tokenAllowed !== true ||
+    report.vaultEvidence?.routerAllowed !== true
+  ) {
+    blockers.push(
+      finding(
+        "LIVE_CAP_VAULT_TARGETS_NOT_ALLOWED",
+        "Vault must allow the token setup target and Merchant Moe router.",
+      ),
+    );
   }
-  if (policy.requireGuardedVaultExecution && report.vaultEvidence?.routerGuarded !== true) {
-    blockers.push(finding("LIVE_CAP_ROUTER_NOT_GUARDED", "Merchant Moe router must be marked guard-required in AgentVault."));
+  if (
+    policy.requireGuardedVaultExecution &&
+    report.vaultEvidence?.routerGuarded !== true
+  ) {
+    blockers.push(
+      finding(
+        "LIVE_CAP_ROUTER_NOT_GUARDED",
+        "Merchant Moe router must be marked guard-required in AgentVault.",
+      ),
+    );
   }
 
-  const tokenOutDelta = parseReportUnsigned(report.forkExecution?.tokenOutDelta, "tokenOutDelta");
+  const tokenOutDelta = parseReportUnsigned(
+    report.forkExecution?.tokenOutDelta,
+    "tokenOutDelta",
+  );
   const minOutWei = parseReportUnsigned(report.minOutWei, "minOutWei");
-  if (report.forkExecution?.passed && tokenOutDelta !== undefined && minOutWei !== undefined && tokenOutDelta < minOutWei) {
-    blockers.push(finding("LIVE_CAP_OUTPUT_BELOW_MIN_OUT", `Fork output delta ${tokenOutDelta} is below minOut ${minOutWei}.`));
+  if (
+    report.forkExecution?.passed &&
+    tokenOutDelta !== undefined &&
+    minOutWei !== undefined &&
+    tokenOutDelta < minOutWei
+  ) {
+    blockers.push(
+      finding(
+        "LIVE_CAP_OUTPUT_BELOW_MIN_OUT",
+        `Fork output delta ${tokenOutDelta} is below minOut ${minOutWei}.`,
+      ),
+    );
   }
-  if (report.forkExecution?.passed && String(report.forkExecution.agentDecisionEvents ?? "") !== "1") {
-    blockers.push(finding("LIVE_CAP_AGENT_DECISION_EVENT_MISSING", "Fork execution must emit exactly one AgentDecision event."));
+  if (
+    report.forkExecution?.passed &&
+    String(report.forkExecution.agentDecisionEvents ?? "") !== "1"
+  ) {
+    blockers.push(
+      finding(
+        "LIVE_CAP_AGENT_DECISION_EVENT_MISSING",
+        "Fork execution must emit exactly one AgentDecision event.",
+      ),
+    );
   }
 
   warnings.push(
