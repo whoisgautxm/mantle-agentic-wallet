@@ -10,7 +10,7 @@ export interface DecisionAnalysis {
 }
 
 export type Decision =
-  | { kind: "hold"; rationale: string; analysis?: DecisionAnalysis }
+  | { kind: "hold"; rationale: string; analysis?: DecisionAnalysis; agentTrace?: Record<string, unknown> }
   | {
       kind: "execute";
       target: `0x${string}`;
@@ -23,6 +23,7 @@ export type Decision =
       minOutWei?: bigint;
       expectedOutWei?: bigint;
       analysis?: DecisionAnalysis;
+      agentTrace?: Record<string, unknown>;
     };
 
 export interface VaultState {

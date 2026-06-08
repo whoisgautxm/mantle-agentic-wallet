@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "Live OpenAI candidate-assessment smoke",
+  "initialPortfolio": {
+    "mnt": "1",
+    "token": "0"
+  },
+  "baseline": {
+    "buyMnt": "0.02"
+  },
+  "costs": {
+    "swapFeeBps": 30,
+    "slippageBps": 20,
+    "gasMnt": "0.0002"
+  },
+  "vaultLimits": {
+    "spendPerTxMnt": "0.1",
+    "dailySpendMnt": "1"
+  },
+  "regimes": [
+    {
+      "id": "clear-rally-smoke",
+      "label": "Clear rally candidate assessment",
+      "description": "A short rising path that creates a small number of deterministic buy candidates for live OpenAI approval/veto testing.",
+      "prices": ["2.00", "2.04", "2.09", "2.16", "2.25"]
+    }
+  ]
+}

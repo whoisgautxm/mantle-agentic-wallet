@@ -710,6 +710,24 @@ h2 {
   font-family: "Courier New", monospace;
 }
 
+.decision-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.74rem;
+}
+
+.decision-meta .badge {
+  min-width: auto;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
 .decision p {
   color: #eadfc8;
   line-height: 1.5;

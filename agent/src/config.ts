@@ -1,8 +1,10 @@
-import "dotenv/config";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mantleSepoliaTestnet } from "viem/chains";
 import addresses from "../../shared/addresses.json" with { type: "json" };
+import { loadProjectEnv } from "./projectEnv.js";
+
+loadProjectEnv();
 
 function env(name: string): string {
   const v = process.env[name];

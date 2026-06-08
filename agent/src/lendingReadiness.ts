@@ -1,5 +1,5 @@
-import "dotenv/config";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import {
   DEFAULT_LENDING_HEALTH_LIMITS,
   evaluateLendingHealth,
@@ -12,6 +12,8 @@ import type {
   LendingProtocolId,
 } from "./protocols/lending/types.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
+
+loadProjectEnv();
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 

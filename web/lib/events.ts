@@ -30,6 +30,9 @@ export interface DecisionLog {
   rationale: string;
   txHash: string;
   block: string;
+  timestamp?: string;
+  outcome?: string;
+  source?: "chain" | "trace";
 }
 
 export interface PricePoint {

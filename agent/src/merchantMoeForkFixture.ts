@@ -1,5 +1,5 @@
-import "dotenv/config";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import {
   buildMerchantMoeForkSimulationReport,
   formatMerchantMoeForkSimulation,
@@ -12,6 +12,8 @@ import { quoteTokenInPerTokenOutPriceWei, type MerchantMoeQuoteSmokeConfig } fro
 import { MERCHANT_MOE_MANTLE, type MerchantMoeQuote } from "./protocols/merchantMoeReadOnlyAdapter.js";
 import { MERCHANT_MOE_TOKENS } from "./protocols/merchantMoeRoutePresets.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
+
+loadProjectEnv();
 
 const fixtureOwner = "0x3333333333333333333333333333333333333333" as const;
 const fixturePair = "0x4444444444444444444444444444444444444444" as const;

@@ -4,7 +4,9 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { planToDecision } from "./protocols/types.js";
 import {
+  createAiAssistedBenchmarkDecisionRunner,
   createOfflineBenchmarkDecisionRunner,
+  createOpenAiCandidateAssessmentBenchmarkDecisionRunner,
   loadMultiRegimeFixture,
   rateLimitDelayMs,
   runMultiRegimeBenchmark,
@@ -51,7 +53,11 @@ describe("multi-regime benchmark", () => {
     expect(BigInt(ai.netRoiBps)).toBeLessThan(BigInt(ai.grossRoiBps));
     expect(report.aggregate.modelErrors).toBe(0);
     expect(report.regimes[0].comparators.dca.runner).toBe("dca");
+    expect(report.regimes[0].comparators["buy-and-hold"].runner).toBe("buy-and-hold");
+    expect(report.regimes[0].comparators["deterministic-ensemble"].runner).toBe("deterministic-ensemble");
     expect(report.regimes[0].comparators.momentum.ticks).toBe(3);
+    expect(ai.score.compositeScoreBps).toEqual(expect.any(String));
+    expect(report.aggregate.comparatorAverageCompositeScoreBps.hold).toEqual(expect.any(String));
   });
 
   it("records risk-blocked oversized actions instead of settling them", async () => {
@@ -107,6 +113,259 @@ describe("multi-regime benchmark", () => {
 
     expect(observedLengths).toEqual([1, 2, 3]);
     expect(report.regimes[0].ai.timeline.every((tick) => tick.rationale === "custom strategy hold")).toBe(true);
+  });
+
+  it("runs the synchronized AI-assisted candidate assessment path", async () => {
+    const risingFixture: MultiRegimeFixture = {
+      ...fixture,
+      regimes: [
+        {
+          id: "clear-rally",
+          label: "Clear rally",
+          description: "test",
+          prices: ["2", "2.04", "2.09", "2.16", "2.25"],
+        },
+      ],
+    };
+
+    const report = await runMultiRegimeBenchmark(
+      risingFixture,
+      createAiAssistedBenchmarkDecisionRunner(),
+      { model: "ai-assisted-ensemble-offline" },
+    );
+    const ai = report.regimes[0].ai;
+
+    expect(report.model).toBe("ai-assisted-ensemble-offline");
+    expect(ai.executed).toBeGreaterThan(0);
+    expect(ai.timeline.some((tick) => tick.decisionMode === "candidate_assessment")).toBe(true);
+    expect(ai.timeline.some((tick) => tick.candidateId)).toBe(true);
+  });
+
+  it("runs the live OpenAI candidate-assessment benchmark path with a mocked client", async () => {
+    const calls: any[] = [];
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async (payload: any) => {
+            calls.push(payload);
+            const userContent = String(payload.input[1].content);
+            const candidate = JSON.parse(userContent.match(/Candidate JSON: (.+)\n\nReturn/)?.[1] ?? "{}");
+            return {
+              output: [
+                {
+                  type: "function_call",
+                  name: "assess_trade_candidate",
+                  arguments: JSON.stringify({
+                    candidateId: candidate.id,
+                    verdict: "approve",
+                    vetoCode: "none",
+                    confidence: 88,
+                    evidence: ["Candidate is grounded in observed trend and supplied vault state."],
+                    rationale: "Approve the deterministic benchmark candidate.",
+                  }),
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+    const report = await runMultiRegimeBenchmark(
+      {
+        ...fixture,
+        regimes: [
+          {
+            id: "clear-rally",
+            label: "Clear rally",
+            description: "test",
+            prices: ["2", "2.04", "2.09", "2.16", "2.25"],
+          },
+        ],
+      },
+      createOpenAiCandidateAssessmentBenchmarkDecisionRunner({
+        client: client as any,
+        model: "mock-openai",
+        minimumIntervalMs: 0,
+      }),
+      { model: "openai-candidate-assessment:mock-openai", liveModel: true },
+    );
+
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((call) => call.tools[0].name === "assess_trade_candidate")).toBe(true);
+    expect(report.aggregate.modelAssessment.candidatesAssessed).toBe(calls.length);
+    expect(report.aggregate.modelAssessment.approvals).toBe(calls.length);
+    expect(report.aggregate.modelAssessment.approvalPrecisionBps).toBe("10000");
+    expect(report.aggregate.incrementalValueGate.comparator).toBe("deterministic-ensemble");
+  });
+
+  it("reuses cached candidate assessments across benchmark runner instances", async () => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), "candidate-assessment-cache-"));
+    const cachePath = path.join(outputDir, "cache.json");
+    const calls: any[] = [];
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async (payload: any) => {
+            calls.push(payload);
+            const userContent = String(payload.input[1].content);
+            const candidate = JSON.parse(userContent.match(/Candidate JSON: (.+)\n\nReturn/)?.[1] ?? "{}");
+            return {
+              output: [
+                {
+                  type: "function_call",
+                  name: "assess_trade_candidate",
+                  arguments: JSON.stringify({
+                    candidateId: candidate.id,
+                    verdict: "approve",
+                    vetoCode: "none",
+                    confidence: 90,
+                    evidence: ["Cached assessment test evidence."],
+                    rationale: "Approve for cache test.",
+                  }),
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+    const risingFixture: MultiRegimeFixture = {
+      ...fixture,
+      regimes: [
+        {
+          id: "clear-rally",
+          label: "Clear rally",
+          description: "test",
+          prices: ["2", "2.04", "2.09", "2.16", "2.25"],
+        },
+      ],
+    };
+
+    await runMultiRegimeBenchmark(
+      risingFixture,
+      createOpenAiCandidateAssessmentBenchmarkDecisionRunner({
+        client: client as any,
+        model: "mock-openai",
+        minimumIntervalMs: 0,
+        cachePath,
+      }),
+      { model: "openai-candidate-assessment:mock-openai", liveModel: true },
+    );
+    const callsAfterFirstRun = calls.length;
+    const secondReport = await runMultiRegimeBenchmark(
+      risingFixture,
+      createOpenAiCandidateAssessmentBenchmarkDecisionRunner({
+        client: client as any,
+        model: "mock-openai",
+        minimumIntervalMs: 0,
+        cachePath,
+      }),
+      { model: "openai-candidate-assessment:mock-openai", liveModel: true },
+    );
+
+    expect(callsAfterFirstRun).toBeGreaterThan(0);
+    expect(calls).toHaveLength(callsAfterFirstRun);
+    expect(secondReport.aggregate.modelAssessment.cacheHits).toBe(callsAfterFirstRun);
+    expect(secondReport.aggregate.modelAssessment.cacheMisses).toBe(0);
+  });
+
+  it("defers rate-limited candidate assessments without recording model errors", async () => {
+    const rateLimitError = Object.assign(new Error("rate limited"), { status: 429 });
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async () => {
+            throw rateLimitError;
+          },
+        },
+      },
+    };
+    const report = await runMultiRegimeBenchmark(
+      {
+        ...fixture,
+        regimes: [
+          {
+            id: "clear-rally",
+            label: "Clear rally",
+            description: "test",
+            prices: ["2", "2.04", "2.09", "2.16", "2.25"],
+          },
+        ],
+      },
+      createOpenAiCandidateAssessmentBenchmarkDecisionRunner({
+        client: client as any,
+        model: "mock-openai",
+        maxRetries: 0,
+        minimumIntervalMs: 0,
+        deferRateLimit: true,
+      }),
+      { model: "openai-candidate-assessment:mock-openai", liveModel: true },
+    );
+
+    expect(report.ok).toBe(true);
+    expect(report.aggregate.modelErrors).toBe(0);
+    expect(report.aggregate.modelAssessment.providerRateLimitSkips).toBeGreaterThan(0);
+    expect(report.regimes[0].ai.timeline.some((tick) => tick.providerRateLimitDeferred)).toBe(true);
+  });
+
+  it("can cap fresh live assessments per regime", async () => {
+    const calls: any[] = [];
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async (payload: any) => {
+            calls.push(payload);
+            const userContent = String(payload.input[1].content);
+            const candidate = JSON.parse(userContent.match(/Candidate JSON: (.+)\n\nReturn/)?.[1] ?? "{}");
+            return {
+              output: [
+                {
+                  type: "function_call",
+                  name: "assess_trade_candidate",
+                  arguments: JSON.stringify({
+                    candidateId: candidate.id,
+                    verdict: "approve",
+                    vetoCode: "none",
+                    confidence: 87,
+                    evidence: ["Budget test evidence."],
+                    rationale: "Approve the first candidate only.",
+                  }),
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+    const report = await runMultiRegimeBenchmark(
+      {
+        ...fixture,
+        regimes: [
+          {
+            id: "clear-rally",
+            label: "Clear rally",
+            description: "test",
+            prices: ["2", "2.04", "2.09", "2.16", "2.25"],
+          },
+        ],
+      },
+      createOpenAiCandidateAssessmentBenchmarkDecisionRunner({
+        client: client as any,
+        model: "mock-openai",
+        minimumIntervalMs: 0,
+        maxAssessmentsPerRegime: 1,
+      }),
+      { model: "openai-candidate-assessment:mock-openai", liveModel: true },
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(report.aggregate.modelAssessment.candidatesAssessed).toBe(1);
+    expect(report.aggregate.modelAssessment.assessmentBudgetSkips).toBeGreaterThan(0);
+    expect(report.regimes[0].ai.timeline.some((tick) => tick.modelAssessmentError === "assessment_budget_exhausted")).toBe(true);
   });
 
   it("honors API retry hints when rate limited", () => {

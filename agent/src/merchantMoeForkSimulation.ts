@@ -1,7 +1,7 @@
-import "dotenv/config";
 import { createPublicClient, http } from "viem";
 import { mantle } from "viem/chains";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import { buildMerchantMoeForkReadinessReport, type MerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
 import { parseMerchantMoeQuoteSmokeConfig, type MerchantMoeQuoteSmokeConfig } from "./merchantMoeQuoteSmoke.js";
 import { classifyAllowance } from "./portfolio/allowances.js";
@@ -19,6 +19,8 @@ import {
 import type { SimulationResult } from "./simulation/types.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
 import { VAULT_ABI } from "./vault.js";
+
+loadProjectEnv();
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const HEX_RE = /^0x[a-fA-F0-9]*$/;

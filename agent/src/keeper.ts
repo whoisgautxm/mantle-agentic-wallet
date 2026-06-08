@@ -19,7 +19,7 @@ const REVERSION_PCT = 10;
 const PRICE_MODE = (process.env.KEEPER_PRICE_MODE ?? "walk").toLowerCase();
 const KEEPER_SEED = Number(process.env.KEEPER_SEED ?? "20260607");
 const MAX_STEP_BPS = Number(process.env.KEEPER_MAX_STEP_BPS ?? "600");
-let tickIndex = 0;
+let tickIndex = Number(process.env.KEEPER_START_TICK ?? "0");
 
 function nextReturnBps(): number {
   if (PRICE_MODE === "scripted") return scriptedReturnBps(tickIndex);

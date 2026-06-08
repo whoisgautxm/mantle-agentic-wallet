@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "name": "Seeded development market paths (seed 20260608)",
+  "initialPortfolio": {
+    "mnt": "1",
+    "token": "0"
+  },
+  "baseline": {
+    "buyMnt": "0.02"
+  },
+  "costs": {
+    "swapFeeBps": 30,
+    "slippageBps": 20,
+    "gasMnt": "0.0002"
+  },
+  "vaultLimits": {
+    "spendPerTxMnt": "0.1",
+    "dailySpendMnt": "1"
+  },
+  "regimes": [
+    {
+      "id": "dev-001",
+      "label": "Synthetic path dev-001",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.170804",
+        "2.18144",
+        "2.19671",
+        "2.202421",
+        "2.21101",
+        "2.229361",
+        "2.250094",
+        "2.261344",
+        "2.274459",
+        "2.296976",
+        "2.313743",
+        "2.329245",
+        "2.346481",
+        "2.362437"
+      ]
+    },
+    {
+      "id": "dev-002",
+      "label": "Synthetic path dev-002",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.583288",
+        "1.587879",
+        "1.598041",
+        "1.582699",
+        "1.601216",
+        "1.608741",
+        "1.605523",
+        "1.605041",
+        "1.593966",
+        "1.581533",
+        "1.598613",
+        "1.597014",
+        "1.610908",
+        "1.604303"
+      ]
+    },
+    {
+      "id": "dev-003",
+      "label": "Synthetic path dev-003",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.437582",
+        "2.457082",
+        "2.469121",
+        "2.492577",
+        "2.506784",
+        "2.52383",
+        "2.546039",
+        "2.576846",
+        "2.598233",
+        "2.623435",
+        "2.653079",
+        "2.668732",
+        "2.686345",
+        "2.712671"
+      ]
+    },
+    {
+      "id": "dev-004",
+      "label": "Synthetic path dev-004",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.823712",
+        "1.836295",
+        "1.848781",
+        "1.865974",
+        "1.889671",
+        "1.90082",
+        "1.911844",
+        "1.913947",
+        "1.934426",
+        "1.949321",
+        "1.960042",
+        "1.981602",
+        "1.993689",
+        "2.007445"
+      ]
+    },
+    {
+      "id": "dev-005",
+      "label": "Synthetic path dev-005",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.984469",
+        "2.003718",
+        "1.997306",
+        "2.005894",
+        "2.017528",
+        "2.019343",
+        "1.990062",
+        "1.979713",
+        "1.986444",
+        "1.999157",
+        "1.982563",
+        "1.961151",
+        "1.952521",
+        "1.939829"
+      ]
+    },
+    {
+      "id": "dev-006",
+      "label": "Synthetic path dev-006",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.123518",
+        "2.140081",
+        "2.145859",
+        "2.170965",
+        "2.189852",
+        "2.215254",
+        "2.238957",
+        "2.252166",
+        "2.265678",
+        "2.279951",
+        "2.292034",
+        "2.308995",
+        "2.332315",
+        "2.347241"
+      ]
+    },
+    {
+      "id": "dev-007",
+      "label": "Synthetic path dev-007",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.628676",
+        "1.63063",
+        "1.629325",
+        "1.633724",
+        "1.612812",
+        "1.632004",
+        "1.649629",
+        "1.640391",
+        "1.627103",
+        "1.641258",
+        "1.630425",
+        "1.634011",
+        "1.641364",
+        "1.635619"
+      ]
+    },
+    {
+      "id": "dev-008",
+      "label": "Synthetic path dev-008",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.428613",
+        "2.425941",
+        "2.436129",
+        "2.435885",
+        "2.430038",
+        "1.824715",
+        "1.883653",
+        "1.938467",
+        "1.964054",
+        "1.998424",
+        "2.048384",
+        "2.105738",
+        "2.136271",
+        "2.169169"
+      ]
+    },
+    {
+      "id": "dev-009",
+      "label": "Synthetic path dev-009",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.714653",
+        "1.717224",
+        "1.717567",
+        "1.713616",
+        "1.708303",
+        "1.707448",
+        "1.245071",
+        "1.279559",
+        "1.305789",
+        "1.331121",
+        "1.359074",
+        "1.384352",
+        "1.396118",
+        "1.417338"
+      ]
+    },
+    {
+      "id": "dev-010",
+      "label": "Synthetic path dev-010",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.231439",
+        "2.246612",
+        "2.238524",
+        "2.211885",
+        "2.234888",
+        "2.244721",
+        "2.248537",
+        "2.231897",
+        "2.256447",
+        "2.23501",
+        "2.260712",
+        "2.253251",
+        "2.2528",
+        "2.251673"
+      ]
+    },
+    {
+      "id": "dev-011",
+      "label": "Synthetic path dev-011",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.429248",
+        "2.423417",
+        "2.426567",
+        "2.408853",
+        "2.42186",
+        "2.397883",
+        "2.404836",
+        "2.41686",
+        "2.446587",
+        "2.421142",
+        "2.422594",
+        "2.414599",
+        "2.440676",
+        "2.458981"
+      ]
+    },
+    {
+      "id": "dev-012",
+      "label": "Synthetic path dev-012",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.510082",
+        "1.501474",
+        "1.510783",
+        "1.51743",
+        "1.504228",
+        "1.502272",
+        "1.491906",
+        "1.4837",
+        "1.505213",
+        "1.520265",
+        "1.516312",
+        "1.513734",
+        "1.52993",
+        "1.541251"
+      ]
+    },
+    {
+      "id": "dev-013",
+      "label": "Synthetic path dev-013",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.496695",
+        "2.503935",
+        "2.523215",
+        "2.539868",
+        "2.555869",
+        "2.574782",
+        "2.585338",
+        "2.598006",
+        "2.61775",
+        "2.641309",
+        "2.655572",
+        "2.665132",
+        "2.682455",
+        "2.699622"
+      ]
+    },
+    {
+      "id": "dev-014",
+      "label": "Synthetic path dev-014",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.353009",
+        "2.376774",
+        "2.374159",
+        "2.37131",
+        "2.391229",
+        "2.39888",
+        "2.400559",
+        "2.381114",
+        "2.34373",
+        "2.359198",
+        "2.34693",
+        "2.321113",
+        "2.351519",
+        "2.334823"
+      ]
+    },
+    {
+      "id": "dev-015",
+      "label": "Synthetic path dev-015",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.349631",
+        "2.369132",
+        "2.381925",
+        "2.398598",
+        "2.421144",
+        "2.441723",
+        "2.451001",
+        "2.459089",
+        "2.474827",
+        "2.49413",
+        "2.505104",
+        "2.531407",
+        "2.560011",
+        "2.586379"
+      ]
+    },
+    {
+      "id": "dev-016",
+      "label": "Synthetic path dev-016",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.621683",
+        "1.606601",
+        "1.58941",
+        "1.575741",
+        "1.560456",
+        "1.549532",
+        "1.535896",
+        "1.52238",
+        "1.515224",
+        "1.498101",
+        "1.486266",
+        "1.475713",
+        "1.468777",
+        "1.452326"
+      ]
+    },
+    {
+      "id": "dev-017",
+      "label": "Synthetic path dev-017",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.345021",
+        "2.352994",
+        "2.345699",
+        "2.335143",
+        "2.326736",
+        "2.337671",
+        "2.337437",
+        "1.911555",
+        "1.924362",
+        "1.980168",
+        "2.025315",
+        "2.056302",
+        "2.09496",
+        "2.118423"
+      ]
+    },
+    {
+      "id": "dev-018",
+      "label": "Synthetic path dev-018",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "1.604229",
+        "1.606956",
+        "1.622864",
+        "1.634061",
+        "1.645336",
+        "1.65241",
+        "1.671247",
+        "1.678767",
+        "1.701933",
+        "1.721335",
+        "1.730802",
+        "1.744129",
+        "1.753372",
+        "1.769503"
+      ]
+    },
+    {
+      "id": "dev-019",
+      "label": "Synthetic path dev-019",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.117308",
+        "2.14208",
+        "2.11359",
+        "2.09816",
+        "2.123757",
+        "2.10889",
+        "2.124284",
+        "2.128532",
+        "2.099583",
+        "2.120368",
+        "2.132454",
+        "2.111129",
+        "2.094451",
+        "2.101991"
+      ]
+    },
+    {
+      "id": "dev-020",
+      "label": "Synthetic path dev-020",
+      "description": "Seeded synthetic path reserved for strategy generalization evaluation.",
+      "prices": [
+        "2.301491",
+        "2.286301",
+        "2.270754",
+        "2.248954",
+        "2.23546",
+        "2.219364",
+        "2.201609",
+        "2.194343",
+        "2.175252",
+        "2.170031",
+        "2.159831",
+        "2.13672",
+        "2.124754",
+        "2.115192"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { getDecisions, getPriceHistory, getTrades } from "../lib/events";
 import { getChainReplaySnapshot } from "../lib/chainReplaySnapshot";
 import { buildSeries, currentStanding } from "../lib/pnl";
+import AutoRefresh from "./components/AutoRefresh";
 import PriceChart from "./components/PriceChart";
 import DecisionFeed from "./components/DecisionFeed";
 import LendingReadinessPanel from "./components/LendingReadinessPanel";
@@ -21,6 +22,7 @@ import { getProtocolGate } from "../lib/protocolGate";
 import { getProtocolReadiness } from "../lib/protocolReadiness";
 import { getSimulationFeed } from "../lib/simulationFeed";
 import { getLiveStatus } from "../lib/status";
+import { getTraceReplay } from "../lib/traceReplay";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,6 +43,11 @@ function pct(bps: bigint): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
+function compactIso(value: string | undefined): string {
+  if (!value) return "unknown";
+  return value.replace("T", " ").slice(0, 16) + " UTC";
+}
+
 async function safeRead<T>(label: string, read: () => Promise<T>, fallback: T): Promise<{ value: T; warning?: string }> {
   try {
     return { value: await read() };
@@ -54,15 +61,19 @@ export default async function Page() {
   const aiVault = ((addresses as any).aiVault ?? addresses.agentVault) as `0x${string}`;
   const baselineVault = (addresses as any).baselineVault as `0x${string}`;
 
-  const snapshotRequested = (process.env.CHAIN_REPLAY_SOURCE ?? "snapshot").toLowerCase() !== "live";
-  const liveReplay = snapshotRequested
-    ? undefined
-    : await Promise.all([
+  const requestedReplaySource = (process.env.CHAIN_REPLAY_SOURCE ?? "trace").toLowerCase();
+  const liveRequested = requestedReplaySource === "live";
+  const snapshotRequested = requestedReplaySource === "snapshot";
+  const traceRequested = !liveRequested && !snapshotRequested;
+  const traceReplay = await getTraceReplay();
+  const liveReplay = liveRequested
+    ? await Promise.all([
         safeRead("AI decisions", () => getDecisions(aiVault), []),
         safeRead("baseline decisions", () => getDecisions(baselineVault), []),
         safeRead("price history", getPriceHistory, []),
         safeRead("trade history", getTrades, []),
-      ]);
+      ])
+    : undefined;
   const aiDecisionsResult = liveReplay?.[0] ?? { value: [] };
   const baselineDecisionsResult = liveReplay?.[1] ?? { value: [] };
   const pricesResult = liveReplay?.[2] ?? { value: [] };
@@ -71,11 +82,16 @@ export default async function Page() {
     .map((result) => result.warning)
     .filter(Boolean);
   const replaySnapshot = getChainReplaySnapshot();
-  const usingSnapshot = snapshotRequested || eventWarnings.length > 0;
-  const aiDecisions = usingSnapshot ? replaySnapshot.aiDecisions : aiDecisionsResult.value;
-  const baselineDecisions = usingSnapshot ? replaySnapshot.baselineDecisions : baselineDecisionsResult.value;
-  const prices = usingSnapshot ? replaySnapshot.prices : pricesResult.value;
-  const trades = usingSnapshot ? replaySnapshot.trades : tradesResult.value;
+  const usingTrace = traceRequested && traceReplay.available;
+  const usingSnapshot = !usingTrace && (snapshotRequested || !liveRequested || eventWarnings.length > 0);
+  const aiDecisions = usingTrace ? traceReplay.aiDecisions : usingSnapshot ? replaySnapshot.aiDecisions : aiDecisionsResult.value;
+  const baselineDecisions = usingTrace
+    ? traceReplay.baselineDecisions
+    : usingSnapshot
+      ? replaySnapshot.baselineDecisions
+      : baselineDecisionsResult.value;
+  const prices = usingSnapshot ? replaySnapshot.prices : usingTrace ? [] : pricesResult.value;
+  const trades = usingSnapshot ? replaySnapshot.trades : usingTrace ? [] : tradesResult.value;
   const liveStatus = await getLiveStatus();
   const portfolioStatus = await getPortfolioStatus([
     { name: "AI", address: aiVault },
@@ -87,7 +103,9 @@ export default async function Page() {
   const simulationFeed = await getSimulationFeed();
   const lendingEvidence = await getLendingEvidence();
   const evalReadiness = await getEvalReadiness();
-  const series = buildSeries(prices, trades, aiVault, baselineVault, usingSnapshot ? replaySnapshot.opening : undefined);
+  const series = usingTrace
+    ? traceReplay.series
+    : buildSeries(prices, trades, aiVault, baselineVault, usingSnapshot ? replaySnapshot.opening : undefined);
   const openingPrice = prices[0]?.price ?? 0n;
   const snapshotStarts = usingSnapshot
     ? {
@@ -96,24 +114,32 @@ export default async function Page() {
           replaySnapshot.opening.baselineMntWei + (replaySnapshot.opening.baselineTokenWei * openingPrice) / 10n ** 18n,
       }
     : undefined;
-  const standing = currentStanding(series, snapshotStarts);
+  const standing = currentStanding(series, usingTrace ? traceReplay.starts : snapshotStarts);
 
   // Run provenance (live-run report section 13): never present a stale snapshot as the live leader.
   const dex = (addresses as any).mockDex as string;
   const deployBlock = (addresses as any).deployBlock ?? "?";
-  const dataSourceLabel = usingSnapshot ? "Tracked snapshot" : "Live on-chain";
-  const dataSourceDetail = usingSnapshot
-    ? `${replaySnapshot.source}, captured ${new Date(replaySnapshot.generatedAt).toLocaleString()}`
-    : "live RPC reads";
-  const blockRange = usingSnapshot
-    ? `${replaySnapshot.fromBlock}-${replaySnapshot.toBlock}`
-    : prices.length
-      ? `${prices[0].block.toString()}-${prices[prices.length - 1].block.toString()}`
-      : "n/a";
+  const dataSourceLabel = usingTrace ? "Agent trace" : usingSnapshot ? "Tracked snapshot" : "Live on-chain";
+  const dataSourceBadge = usingTrace ? "TRACE" : usingSnapshot ? "SNAPSHOT" : "LIVE";
+  const dataSourceDetail = usingTrace
+    ? `JSONL replay from ${traceReplay.artifactPath ?? "agent trace"}, updated ${compactIso(traceReplay.updatedAt)}`
+    : usingSnapshot
+      ? `${replaySnapshot.source}, captured ${compactIso(replaySnapshot.generatedAt)}`
+      : "live RPC reads";
+  const blockRange = usingTrace
+    ? `${traceReplay.eventCount} events · ${traceReplay.finalActionCount} final actions`
+    : usingSnapshot
+      ? `${replaySnapshot.fromBlock}-${replaySnapshot.toBlock}`
+      : prices.length
+        ? `${prices[0].block.toString()}-${prices[prices.length - 1].block.toString()}`
+        : "n/a";
+  const standingSource = usingTrace ? "agent JSONL trace" : usingSnapshot ? "tracked snapshot — not a live run" : "live on-chain run";
+  const activityPrimary = usingTrace ? `${aiDecisions.length + baselineDecisions.length} actions` : `${trades.length} trades`;
+  const activitySecondary = usingTrace ? `${series.length} trace points` : `${prices.length} price points`;
 
   return (
     <main>
-      <meta httpEquiv="refresh" content="15" />
+      <AutoRefresh />
       <section className="hero">
         <div>
           <p className="eyebrow">Mantle Turing Test Demo</p>
@@ -138,7 +164,7 @@ export default async function Page() {
               <p className="eyebrow">Run provenance</p>
               <h2>{dataSourceLabel} · accounting: vault-only ROI</h2>
             </div>
-            <span className={`badge ${usingSnapshot ? "warn" : "ok"}`}>{usingSnapshot ? "SNAPSHOT" : "LIVE"}</span>
+            <span className={`badge ${usingSnapshot ? "warn" : "ok"}`}>{dataSourceBadge}</span>
           </div>
           <div className="eval-findings">
             <span>
@@ -148,9 +174,13 @@ export default async function Page() {
               Data source: {dataSourceDetail}. Block range {blockRange}.
             </span>
             <span>
-              The standing below reflects the {usingSnapshot ? "tracked snapshot — not a live run" : "live on-chain run"}. ROI is
-              vault-only and excludes runner gas; gas-adjusted ROI is recorded per decision in the agent trace.
+              The standing below reflects the {standingSource}. ROI is vault-only and excludes runner gas; gas-adjusted ROI is
+              recorded per decision in the agent trace.
             </span>
+            {traceRequested && !usingTrace && traceReplay.error ? <span>Trace replay fallback: {traceReplay.error}</span> : null}
+            {eventWarnings.map((warning) => (
+              <span key={warning}>Live RPC fallback: {warning}</span>
+            ))}
           </div>
         </section>
       </section>
@@ -173,8 +203,8 @@ export default async function Page() {
         </div>
         <div>
           <span>Activity</span>
-          <strong>{trades.length} trades</strong>
-          <span>{prices.length} price points</span>
+          <strong>{activityPrimary}</strong>
+          <span>{activitySecondary}</span>
         </div>
       </section>
 
@@ -241,10 +271,35 @@ export default async function Page() {
         </section>
       ) : null}
 
+      {usingTrace ? (
+        <section className="insights single">
+          <section className="insight-card">
+            <div className="section-head compact">
+              <div>
+                <p className="eyebrow">JSONL replay</p>
+                <h2>Live agent trace source</h2>
+              </div>
+              <span className="badge ok">Refreshes</span>
+            </div>
+            <p className="muted panel-note">
+              The chart and feeds are reading the current agent trace. While the demo loop is running, this file grows every tick and
+              the page refreshes every 15 seconds without a hydration-prone meta tag.
+            </p>
+            <div className="eval-findings">
+              <span>
+                Parsed {traceReplay.eventCount} trace events and {traceReplay.finalActionCount} final actions from{" "}
+                {traceReplay.artifactPath}.
+              </span>
+              <span>Last file update: {compactIso(traceReplay.updatedAt)}.</span>
+            </div>
+          </section>
+        </section>
+      ) : null}
+
       <section className="chart-card">
         <div className="section-head">
           <div>
-            <p className="eyebrow">On-chain replay</p>
+            <p className="eyebrow">{usingTrace ? "Agent trace replay" : "On-chain replay"}</p>
             <h2>Price and total-portfolio timeline</h2>
           </div>
           <span>Auto-refreshes every 15s</span>

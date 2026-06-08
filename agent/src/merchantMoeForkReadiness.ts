@@ -1,5 +1,5 @@
-import "dotenv/config";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import {
   buildMerchantMoeQuoteRiskReport,
   parseMerchantMoeQuoteSmokeConfig,
@@ -16,6 +16,8 @@ import {
   type MerchantMoeReadOnlyAdapter,
 } from "./protocols/merchantMoeReadOnlyAdapter.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
+
+loadProjectEnv();
 
 export interface MerchantMoeForkReadinessBlocker {
   ruleId: "DEX_ORACLE_DEVIATION" | "FORK_RPC_MISSING" | "EXECUTION_CALLDATA_DISABLED";

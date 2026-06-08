@@ -1,9 +1,9 @@
-import "dotenv/config";
 import { spawn, type ChildProcess } from "child_process";
 import { once } from "events";
 import { readFile } from "fs/promises";
 import path from "path";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import {
   createPublicClient,
   encodeDeployData,
@@ -22,6 +22,8 @@ import {
   type MerchantMoeForkSimulationReport,
   type MerchantMoeVaultEvidence,
 } from "./merchantMoeForkSimulation.js";
+
+loadProjectEnv();
 import { buildMerchantMoeForkReadinessReport } from "./merchantMoeForkReadiness.js";
 import {
   parseMerchantMoeQuoteSmokeConfig,

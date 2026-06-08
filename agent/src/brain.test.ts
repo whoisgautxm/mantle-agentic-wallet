@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildDecisionFromToolUse, normalizeTradeIntent, parseToolUseIntent } from "./brain.js";
+import {
+  buildCandidateFromStrategy,
+  buildDecisionFromCandidateAssessment,
+  buildDecisionFromToolUse,
+  decide,
+  normalizeTradeIntent,
+  parseCandidateAssessment,
+  parseToolUseIntent,
+} from "./brain.js";
 import { computeMarketFeatures } from "./marketFeatures.js";
 import { createMockDexAdapter } from "./protocols/mockDexAdapter.js";
 import type { StrategyFunction } from "./strategies/ensemble.js";
@@ -258,5 +266,236 @@ describe("tool-use parsing", () => {
       expect(decision.valueWei).toBe(3n * 10n ** 16n);
       expect(decision.rationale).toContain("ensemble prior capped");
     }
+  });
+
+  it("rejects a zero-inventory position hallucination instead of letting a model veto suppress a candidate", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const zeroInventoryState = { ...state, tokenBalanceWei: 0n };
+    const priceHistory = [
+      2n * 10n ** 18n,
+      21n * 10n ** 17n,
+      22n * 10n ** 17n,
+      23n * 10n ** 17n,
+    ];
+    const features = computeMarketFeatures(priceHistory);
+    const buyPrior: StrategyFunction = () => ({
+      action: "buy",
+      amountMntWei: 5n * 10n ** 16n,
+      sizePercent: 50,
+      expectedEdgeBps: 350,
+      rationale: "Ensemble followed a confirmed uptrend with available cash.",
+    });
+    const result = buildCandidateFromStrategy(
+      zeroInventoryState,
+      priceHistory,
+      features,
+      { estimatedExecutionCostBps: 50, strategyPrior: buyPrior },
+      2_000n,
+    );
+
+    expect(result.candidate?.action).toBe("buy");
+    const assessment = parseCandidateAssessment({
+      candidateId: result.candidate?.id,
+      verdict: "veto",
+      vetoCode: "state_inconsistency",
+      confidence: 80,
+      evidence: ["Avoid repeatedly selling the winning position."],
+      rationale: "Preserve the winning position instead of adding.",
+    });
+    const decision = await buildDecisionFromCandidateAssessment(
+      result.candidate!,
+      assessment,
+      adapter,
+      zeroInventoryState,
+      result.analysis,
+    );
+
+    expect(decision.kind).toBe("execute");
+    if (decision.kind === "execute") {
+      expect(decision.action).toBe("buy");
+      expect(decision.valueWei).toBe(5n * 10n ** 16n);
+      expect(decision.rationale).toContain("OpenAI veto ignored");
+      expect(decision.agentTrace?.assessmentValidation).toMatchObject({
+        ok: false,
+        finalVerdict: "invalid_veto_ignored",
+      });
+    }
+  });
+
+  it("holds before an OpenAI call when the deterministic candidate is uneconomic", () => {
+    const priceHistory = [
+      2n * 10n ** 18n,
+      21n * 10n ** 17n,
+      22n * 10n ** 17n,
+      23n * 10n ** 17n,
+    ];
+    const features = computeMarketFeatures(priceHistory);
+    const tinyBuyPrior: StrategyFunction = () => ({
+      action: "buy",
+      amountMntWei: 1n * 10n ** 16n,
+      sizePercent: 10,
+      expectedEdgeBps: 150,
+      rationale: "Tiny uptrend buy candidate.",
+    });
+    const result = buildCandidateFromStrategy(
+      { ...state, tokenBalanceWei: 0n },
+      priceHistory,
+      features,
+      {
+        estimatedExecutionCostBps: 50,
+        strategyPrior: tinyBuyPrior,
+        preModelGasEstimateUnits: 170_000n,
+        preModelGasPriceWei: 50_000_100_000n,
+        slippageBps: 100,
+        costBufferBps: 10,
+      },
+      2_000n,
+    );
+
+    expect(result.candidate).toBeUndefined();
+    expect(result.hold?.kind).toBe("hold");
+    expect(result.reason).toBe("economic_pre_gate_hold");
+    expect(result.economicGate?.ok).toBe(false);
+    expect(result.hold?.rationale).toContain("held before model call");
+  });
+
+  it("honors a valid model veto for a deterministic candidate", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const priceHistory = [
+      2n * 10n ** 18n,
+      21n * 10n ** 17n,
+      22n * 10n ** 17n,
+      23n * 10n ** 17n,
+    ];
+    const features = computeMarketFeatures(priceHistory);
+    const buyPrior: StrategyFunction = () => ({
+      action: "buy",
+      amountMntWei: 5n * 10n ** 16n,
+      sizePercent: 50,
+      expectedEdgeBps: 350,
+      rationale: "Ensemble followed a confirmed uptrend with available cash.",
+    });
+    const result = buildCandidateFromStrategy(
+      { ...state, tokenBalanceWei: 0n },
+      priceHistory,
+      features,
+      { estimatedExecutionCostBps: 50, strategyPrior: buyPrior },
+      2_000n,
+    );
+    const assessment = parseCandidateAssessment({
+      candidateId: result.candidate?.id,
+      verdict: "veto",
+      vetoCode: "tail_risk",
+      confidence: 76,
+      evidence: ["Recent momentum is positive but tail-risk evidence is still elevated."],
+      rationale: "Tail risk is too high for this controlled example.",
+    });
+    const decision = await buildDecisionFromCandidateAssessment(
+      result.candidate!,
+      assessment,
+      adapter,
+      { ...state, tokenBalanceWei: 0n },
+      result.analysis,
+    );
+
+    expect(decision.kind).toBe("hold");
+    expect(decision.rationale).toContain("OpenAI vetoed deterministic candidate");
+    expect(decision.agentTrace?.assessmentValidation).toMatchObject({
+      ok: true,
+      finalVerdict: "vetoed",
+    });
+  });
+
+  it("uses OpenAI as a candidate critic in ensemble mode instead of asking for a free-form action", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const priceHistory = [
+      2n * 10n ** 18n,
+      21n * 10n ** 17n,
+      22n * 10n ** 17n,
+      23n * 10n ** 17n,
+    ];
+    const buyPrior: StrategyFunction = () => ({
+      action: "buy",
+      amountMntWei: 5n * 10n ** 16n,
+      sizePercent: 50,
+      expectedEdgeBps: 350,
+      rationale: "Ensemble followed a confirmed uptrend with available cash.",
+    });
+    const calls: any[] = [];
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async (payload: any) => {
+            calls.push(payload);
+            const userContent = String(payload.input[1].content);
+            const candidate = JSON.parse(userContent.match(/Candidate JSON: (.+)\n\nReturn/)?.[1] ?? "{}");
+            return {
+              output: [
+                {
+                  type: "function_call",
+                  name: "assess_trade_candidate",
+                  arguments: JSON.stringify({
+                    candidateId: candidate.id,
+                    verdict: "approve",
+                    vetoCode: "none",
+                    confidence: 82,
+                    evidence: ["Candidate is grounded in the supplied trend and zero token inventory."],
+                    rationale: "Approve the deterministic candidate.",
+                  }),
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+
+    const decision = await decide(
+      client as any,
+      { ...state, tokenBalanceWei: 0n },
+      priceHistory,
+      adapter,
+      "Assess the supplied candidate.",
+      { estimatedExecutionCostBps: 50, strategyPrior: buyPrior },
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].tools[0].name).toBe("assess_trade_candidate");
+    expect(decision.kind).toBe("execute");
+    expect(decision.agentTrace?.decisionMode).toBe("candidate_assessment");
+  });
+
+  it("does not spend an OpenAI call when the deterministic strategy already holds", async () => {
+    const adapter = createMockDexAdapter(DEX, TOKEN, async () => 2n * 10n ** 18n);
+    const holdPrior: StrategyFunction = () => ({
+      action: "hold",
+      sizePercent: 0,
+      expectedEdgeBps: 0,
+      rationale: "No feasible deterministic candidate.",
+    });
+    const client = {
+      provider: "openai" as const,
+      openai: {
+        responses: {
+          create: async () => {
+            throw new Error("OpenAI should not be called for deterministic holds");
+          },
+        },
+      },
+    };
+
+    const decision = await decide(
+      client as any,
+      { ...state, tokenBalanceWei: 0n },
+      [2n * 10n ** 18n, 21n * 10n ** 17n],
+      adapter,
+      "Assess the supplied candidate.",
+      { estimatedExecutionCostBps: 50, strategyPrior: holdPrior },
+    );
+
+    expect(decision.kind).toBe("hold");
+    expect(decision.rationale).toContain("No feasible deterministic candidate");
+    expect(decision.agentTrace?.candidateGate).toMatchObject({ reason: "strategy_hold" });
   });
 });

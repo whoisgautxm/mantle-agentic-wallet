@@ -1,6 +1,6 @@
-import "dotenv/config";
 import { spawn } from "child_process";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import {
   createPublicClient,
   encodeFunctionData,
@@ -25,6 +25,8 @@ import {
   stopAnvil,
   waitForAnvil,
 } from "./merchantMoeAnvilFixture.js";
+
+loadProjectEnv();
 import {
   buildMerchantMoeForkSimulationReport,
   loadMerchantMoeForkSimulationConfig,

@@ -1,5 +1,5 @@
-import "dotenv/config";
 import { pathToFileURL } from "url";
+import { loadProjectEnv } from "./projectEnv.js";
 import { createPythMntUsdOracleRouter } from "./oracles/pythHermes.js";
 import {
   createMerchantMoePublicClient,
@@ -10,6 +10,8 @@ import {
 } from "./protocols/merchantMoeReadOnlyAdapter.js";
 import { getMerchantMoeRoutePreset, routePresetIds } from "./protocols/merchantMoeRoutePresets.js";
 import { createJsonlTraceWriter, type JsonlTraceWriter } from "./tracing.js";
+
+loadProjectEnv();
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const ONE = 10n ** 18n;
