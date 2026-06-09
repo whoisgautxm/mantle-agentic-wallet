@@ -78,8 +78,10 @@ additional optimizer actions.
 
 ## Run The Loop
 
-First run a no-Codex AWS smoke test. It verifies dependencies, tests, build, and
-both benchmark phases:
+### CodeBuild
+
+First run a no-Codex AWS smoke test. It verifies dependencies, tests, build,
+and both benchmark phases:
 
 ```bash
 OPTIMIZER_DRY_RUN=1 \
@@ -101,6 +103,50 @@ OPTIMIZER_STOP_AFTER_REJECTIONS=2 \
 Do not start with a large search. Three attempts are enough to validate the
 loop's quality, cost, and stability. Raise the limit only after reviewing the
 first artifact ledger.
+
+Some new or restricted AWS accounts expose normal CodeBuild concurrency quotas
+but still reject every build with:
+
+```text
+Cannot have more than 0 builds in queue for the account
+```
+
+That hidden account-level restriction requires an AWS Support case. The
+equivalent one-shot Fargate runner below is the supported fallback while the
+CodeBuild queue is disabled.
+
+### Fargate Fallback
+
+Build the dedicated optimizer image and deploy its task definition:
+
+```bash
+AWS_PROFILE=mantle \
+AWS_REGION=ap-south-1 \
+./deploy/aws/optimizer/deploy-fargate.sh
+```
+
+Start a no-Codex dry run:
+
+```bash
+OPTIMIZER_DRY_RUN=1 \
+AWS_PROFILE=mantle \
+AWS_REGION=ap-south-1 \
+./deploy/aws/optimizer/start-fargate.sh
+```
+
+Use the printed task ARN to wait for completion:
+
+```bash
+TASK_ARN="<printed-task-arn>" \
+WAIT=1 \
+AWS_PROFILE=mantle \
+AWS_REGION=ap-south-1 \
+./deploy/aws/optimizer/status-fargate.sh
+```
+
+After the dry run passes, remove `OPTIMIZER_DRY_RUN=1` to run the bounded
+three-attempt Codex loop. The task exits after completion and uploads the same
+artifact layout under `s3://<artifact-bucket>/fargate/<run-id>/`.
 
 ## Monitor
 

@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: One-shot ECS Fargate runner for bounded Mantle strategy optimization.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: mantle-agent-wallet
+    AllowedPattern: "[a-z0-9-]+"
+  Environment:
+    Type: String
+    Default: prod
+    AllowedPattern: "[a-z0-9-]+"
+  OptimizerImageUri:
+    Type: String
+  CodexSecretArn:
+    Type: String
+  CodexModel:
+    Type: String
+    Default: gpt-5.5
+  MaxIterations:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 10
+  StopAfterRejections:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+
+Resources:
+  OptimizerArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOptimizerArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: strategy-optimization
+
+  OptimizerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AppName}/${Environment}/strategy-optimizer"
+      RetentionInDays: 14
+
+  OptimizerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  OptimizerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: StrategyOptimizerRuntime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadCodexSecret
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref CodexSecretArn
+              - Sid: WriteArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt OptimizerArtifactBucket.Arn
+              - Sid: WriteArtifactObjects
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${OptimizerArtifactBucket.Arn}/*"
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  OptimizerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AppName}-${Environment}-strategy-optimizer"
+      Cpu: "2048"
+      Memory: "4096"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt OptimizerExecutionRole.Arn
+      TaskRoleArn: !GetAtt OptimizerTaskRole.Arn
+      ContainerDefinitions:
+        - Name: optimizer
+          Image: !Ref OptimizerImageUri
+          Essential: true
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: OPTIMIZER_ARTIFACT_BUCKET
+              Value: !Ref OptimizerArtifactBucket
+            - Name: OPTIMIZER_CODEX_SECRET_ARN
+              Value: !Ref CodexSecretArn
+            - Name: OPTIMIZER_MODEL
+              Value: !Ref CodexModel
+            - Name: OPTIMIZER_MAX_ITERATIONS
+              Value: !Ref MaxIterations
+            - Name: OPTIMIZER_STOP_AFTER_REJECTIONS
+              Value: !Ref StopAfterRejections
+            - Name: OPTIMIZER_DRY_RUN
+              Value: "0"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref OptimizerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: optimizer
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: strategy-optimization
+
+Outputs:
+  ArtifactBucket:
+    Value: !Ref OptimizerArtifactBucket
+  LogGroup:
+    Value: !Ref OptimizerLogGroup
+  TaskDefinitionArn:
+    Value: !Ref OptimizerTaskDefinition

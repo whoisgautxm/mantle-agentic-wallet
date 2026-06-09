@@ -215,8 +215,40 @@ fi
   fail "full optimization requires a clean Git checkout"
 command -v codex >/dev/null 2>&1 || fail "codex CLI is not installed"
 KEY_FILE="${OPTIMIZER_CODEX_KEY_FILE:-}"
-[[ -n "$KEY_FILE" && -s "$KEY_FILE" ]] ||
+SECRET_ARN="${OPTIMIZER_CODEX_SECRET_ARN:-}"
+if [[ -z "$KEY_FILE" && -z "$SECRET_ARN" ]]; then
+  fail "set OPTIMIZER_CODEX_KEY_FILE or OPTIMIZER_CODEX_SECRET_ARN"
+fi
+if [[ -n "$KEY_FILE" && ! -s "$KEY_FILE" ]]; then
   fail "OPTIMIZER_CODEX_KEY_FILE must point to a non-empty API key file"
+fi
+if [[ -n "$SECRET_ARN" ]]; then
+  command -v aws >/dev/null 2>&1 ||
+    fail "aws CLI is required when OPTIMIZER_CODEX_SECRET_ARN is set"
+fi
+
+read_codex_key() {
+  if [[ -n "$KEY_FILE" ]]; then
+    cat "$KEY_FILE"
+    return
+  fi
+  aws secretsmanager get-secret-value \
+    --secret-id "$SECRET_ARN" \
+    --query SecretString \
+    --output text |
+    node -e '
+      let source = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => { source += chunk; });
+      process.stdin.on("end", () => {
+        const key = JSON.parse(source).CODEX_API_KEY;
+        if (!key || typeof key !== "string") {
+          throw new Error("CODEX_API_KEY is missing from the optimizer secret");
+        }
+        process.stdout.write(key);
+      });
+    '
+}
 
 BEST_COMMIT="$ORIGINAL_COMMIT"
 BEST_DEVELOPMENT="$BASELINE_DEVELOPMENT"
@@ -254,7 +286,7 @@ for ((iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1)); do
   EVENTS_PATH="$ARTIFACT_DIR/iteration-$iteration-codex-events.jsonl"
   CODEX_LOG="$ARTIFACT_DIR/iteration-$iteration-codex.stderr.log"
 
-  if CODEX_API_KEY="$(<"$KEY_FILE")" codex exec \
+  if CODEX_API_KEY="$(read_codex_key)" codex exec \
     --ephemeral \
     --ignore-user-config \
     --ignore-rules \

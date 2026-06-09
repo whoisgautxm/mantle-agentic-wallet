@@ -161,37 +161,16 @@ Resources:
                 - cd "$CODEBUILD_SRC_DIR/repository/agent"
                 - npm ci --cache "$CODEBUILD_SRC_DIR/.npm-cache"
                 - cd "$CODEBUILD_SRC_DIR/repository"
-                - |
-                  aws secretsmanager get-secret-value \
-                    --secret-id "$CODEX_SECRET_ARN" \
-                    --query SecretString \
-                    --output text |
-                  node -e '
-                    let source = "";
-                    process.stdin.setEncoding("utf8");
-                    process.stdin.on("data", (chunk) => { source += chunk; });
-                    process.stdin.on("end", () => {
-                      const key = JSON.parse(source).CODEX_API_KEY;
-                      if (!key || typeof key !== "string") {
-                        throw new Error("CODEX_API_KEY is missing from the optimizer secret");
-                      }
-                      process.stdout.write(key);
-                    });
-                  ' > /tmp/codex-api-key
-                - chmod 600 /tmp/codex-api-key
             build:
               commands:
                 - cd "$CODEBUILD_SRC_DIR/repository"
                 - |
-                  OPTIMIZER_CODEX_KEY_FILE=/tmp/codex-api-key \
+                  OPTIMIZER_CODEX_SECRET_ARN="$CODEX_SECRET_ARN" \
                   OPTIMIZER_MODEL="$OPTIMIZER_MODEL" \
                   OPTIMIZER_MAX_ITERATIONS="$OPTIMIZER_MAX_ITERATIONS" \
                   OPTIMIZER_STOP_AFTER_REJECTIONS="$OPTIMIZER_STOP_AFTER_REJECTIONS" \
                   OPTIMIZER_DRY_RUN="${OPTIMIZER_DRY_RUN:-0}" \
                   bash deploy/aws/optimizer/run-loop.sh
-            post_build:
-              commands:
-                - rm -f /tmp/codex-api-key
           artifacts:
             base-directory: repository
             files:
