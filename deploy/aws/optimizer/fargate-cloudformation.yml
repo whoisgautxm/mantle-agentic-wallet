@@ -16,7 +16,7 @@ Parameters:
     Type: String
   CodexModel:
     Type: String
-    Default: gpt-5.5
+    Default: gpt-5.4-mini
   MaxIterations:
     Type: Number
     Default: 3

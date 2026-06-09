@@ -63,6 +63,11 @@ records the complete terminal error and stops rather than retrying an identical
 oversized request. Increase the OpenAI project limit only if the compact profile
 still exceeds the available tier.
 
+The AWS loop defaults to `gpt-5.4-mini`, which completed the full edit, test,
+development-gate, and held-out-gate path on the current project limits. Set
+`OPTIMIZER_MODEL=gpt-5.5` only after that model's TPM tier is high enough for
+multi-turn repository work.
+
 ## One-Time Setup
 
 Commit and push this optimizer implementation first. The deployment script

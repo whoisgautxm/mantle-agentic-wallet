@@ -6,7 +6,7 @@ cd "$ROOT"
 source "$ROOT/deploy/aws/optimizer/controller.sh"
 
 ALLOWED_PATH="agent/src/strategies/ensemble.ts"
-MODEL="${OPTIMIZER_MODEL:-gpt-5.5}"
+MODEL="${OPTIMIZER_MODEL:-gpt-5.4-mini}"
 MAX_ITERATIONS="${OPTIMIZER_MAX_ITERATIONS:-3}"
 STOP_AFTER_REJECTIONS="${OPTIMIZER_STOP_AFTER_REJECTIONS:-2}"
 DRY_RUN="${OPTIMIZER_DRY_RUN:-0}"

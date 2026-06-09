@@ -9,6 +9,10 @@ fail() {
   exit 1
 }
 
+grep -Fq 'MODEL="${OPTIMIZER_MODEL:-gpt-5.4-mini}"' \
+  "$ROOT/deploy/aws/optimizer/run-loop.sh" ||
+  fail "the optimizer must default to the throughput-safe model"
+
 build_optimizer_codex_args "$ROOT" "/tmp/proposal" "gpt-5.5" "/tmp/result.json"
 
 printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" |
