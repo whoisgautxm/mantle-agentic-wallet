@@ -11,7 +11,7 @@ build_optimizer_codex_args() {
     --ephemeral
     --ignore-user-config
     --ignore-rules
-    --sandbox workspace-write
+    --dangerously-bypass-approvals-and-sandbox
     -C "$workspace"
     -m "$model"
     -c 'shell_environment_policy.inherit="core"'
@@ -24,6 +24,12 @@ build_optimizer_codex_args() {
     --output-last-message "$result_path"
     --json
   )
+}
+
+optimizer_link_agent_dependencies() {
+  local root="$1"
+  local workspace="$2"
+  ln -s "$root/agent/node_modules" "$workspace/agent/node_modules"
 }
 
 optimizer_codex_failure_detail() {

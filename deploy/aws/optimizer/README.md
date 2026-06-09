@@ -43,10 +43,15 @@ These are deterministic fixture results, not a promise of future live returns.
 - `CODEX_API_KEY` is provided only to the single `codex exec` process. Model-run
   shell commands use Codex's core environment and explicitly exclude
   `AWS_*`, `CODEX_*`, and `OPENAI_*`.
-- Codex runs with `--ephemeral`, `--ignore-user-config`,
-  `--ignore-rules`, and `--sandbox workspace-write`.
+- Codex runs with `--ephemeral`, `--ignore-user-config`, and
+  `--ignore-rules`. Fargate does not allow Bubblewrap user namespaces, so the
+  CLI uses its documented isolated-container bypass mode inside this dedicated
+  one-shot task.
 - A compact, low-verbosity Codex instruction profile keeps the isolated task
   within lower API token-per-minute tiers.
+- The optimizer task role can read only the Codex-specific secret and write its
+  artifact bucket. It receives no wallet key, production application secret, or
+  RPC credential.
 - Tests, fixtures, risk controls, execution code, deployment code, and lockfiles
   are immutable to the candidate. Any extra changed path is rejected.
 - Development acceptance is not deployment approval. The final output is an S3

@@ -264,6 +264,7 @@ for ((iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1)); do
 
   git archive "$BEST_COMMIT" | tar -x -C "$PROPOSAL_DIR"
   find "$PROPOSAL_DIR/agent/evals" -type f -name '*held-out*' -delete
+  optimizer_link_agent_dependencies "$ROOT" "$PROPOSAL_DIR"
   (
     cd "$PROPOSAL_DIR"
     git init -q
@@ -271,7 +272,6 @@ for ((iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1)); do
     git -c user.name=mantle-optimizer -c user.email=optimizer@local commit -qm "optimizer baseline"
   )
   PROPOSAL_BASE="$(git -C "$PROPOSAL_DIR" rev-parse HEAD)"
-  ln -s "$ROOT/agent/node_modules" "$PROPOSAL_DIR/agent/node_modules"
 
   PROMPT_PATH="$ARTIFACT_DIR/iteration-$iteration-prompt.md"
   {

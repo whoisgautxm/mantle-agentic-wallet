@@ -12,6 +12,14 @@ fail() {
 build_optimizer_codex_args "$ROOT" "/tmp/proposal" "gpt-5.5" "/tmp/result.json"
 
 printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" |
+  grep -Fq -- '--dangerously-bypass-approvals-and-sandbox' ||
+  fail "isolated Fargate runs must not depend on unavailable user namespaces"
+
+if printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" | grep -Fq -- '--sandbox'; then
+  fail "Bubblewrap-backed sandbox flags are unsupported in Fargate"
+fi
+
+printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" |
   grep -Fq "model_instructions_file=\"$ROOT/deploy/aws/optimizer/codex-base-instructions.md\"" ||
   fail "Codex must use the compact optimizer instructions"
 
@@ -32,5 +40,18 @@ detail="$(optimizer_codex_failure_detail "$events" 1)"
 
 optimizer_codex_failure_is_nonretryable "$events" ||
   fail "oversized TPM requests must be classified as non-retryable"
+
+fixture="$(mktemp -d)"
+mkdir -p "$fixture/root/agent/node_modules" "$fixture/proposal/agent"
+optimizer_link_agent_dependencies "$fixture/root" "$fixture/proposal"
+(
+  cd "$fixture/proposal"
+  git init -q
+  git add -A
+  git -c user.name=test -c user.email=test@local commit -qm baseline
+)
+[[ -z "$(git -C "$fixture/proposal" status --porcelain)" ]] ||
+  fail "the controller dependency link must be part of the proposal baseline"
+rm -rf "$fixture"
 
 echo "[optimizer-controller-test] passed"
