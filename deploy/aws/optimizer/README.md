@@ -45,10 +45,17 @@ These are deterministic fixture results, not a promise of future live returns.
   `AWS_*`, `CODEX_*`, and `OPENAI_*`.
 - Codex runs with `--ephemeral`, `--ignore-user-config`,
   `--ignore-rules`, and `--sandbox workspace-write`.
+- A compact, low-verbosity Codex instruction profile keeps the isolated task
+  within lower API token-per-minute tiers.
 - Tests, fixtures, risk controls, execution code, deployment code, and lockfiles
   are immutable to the candidate. Any extra changed path is rejected.
 - Development acceptance is not deployment approval. The final output is an S3
   artifact for human review.
+
+If Codex reports `Request too large ... tokens per min (TPM)`, the controller
+records the complete terminal error and stops rather than retrying an identical
+oversized request. Increase the OpenAI project limit only if the compact profile
+still exceeds the available tier.
 
 ## One-Time Setup
 

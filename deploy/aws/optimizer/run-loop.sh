@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
+source "$ROOT/deploy/aws/optimizer/controller.sh"
 
 ALLOWED_PATH="agent/src/strategies/ensemble.ts"
 MODEL="${OPTIMIZER_MODEL:-gpt-5.5}"
@@ -286,19 +287,13 @@ for ((iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1)); do
   EVENTS_PATH="$ARTIFACT_DIR/iteration-$iteration-codex-events.jsonl"
   CODEX_LOG="$ARTIFACT_DIR/iteration-$iteration-codex.stderr.log"
 
-  if CODEX_API_KEY="$(read_codex_key)" codex exec \
-    --ephemeral \
-    --ignore-user-config \
-    --ignore-rules \
-    --sandbox workspace-write \
-    -C "$PROPOSAL_DIR" \
-    -m "$MODEL" \
-    -c 'shell_environment_policy.inherit="core"' \
-    -c 'shell_environment_policy.ignore_default_excludes=false' \
-    -c 'shell_environment_policy.exclude=["AWS_*","CODEX_*","OPENAI_*"]' \
-    --output-schema "$PROPOSAL_DIR/deploy/aws/optimizer/codex-result.schema.json" \
-    --output-last-message "$RESULT_IN_WORKSPACE" \
-    --json \
+  build_optimizer_codex_args \
+    "$ROOT" \
+    "$PROPOSAL_DIR" \
+    "$MODEL" \
+    "$RESULT_IN_WORKSPACE"
+
+  if CODEX_API_KEY="$(read_codex_key)" codex "${OPTIMIZER_CODEX_ARGS[@]}" \
     "$(<"$PROMPT_PATH")" \
     >"$EVENTS_PATH" \
     2>"$CODEX_LOG"; then
@@ -313,9 +308,16 @@ for ((iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1)); do
   fi
 
   if [[ "$CODEX_STATUS" -ne 0 || ! -s "$RESULT_PATH" ]]; then
-    append_ledger "$iteration" "codex-failed" "codex exec exited $CODEX_STATUS" "$RESULT_PATH"
-    printf -- '- Iteration %s: Codex failed with exit %s.\n' "$iteration" "$CODEX_STATUS" >>"$HISTORY"
+    FAILURE_DETAIL="$(optimizer_codex_failure_detail "$EVENTS_PATH" "$CODEX_STATUS")"
+    append_ledger "$iteration" "codex-failed" "$FAILURE_DETAIL" "$RESULT_PATH"
+    printf -- '- Iteration %s: Codex failed: %s\n' \
+      "$iteration" \
+      "$FAILURE_DETAIL" >>"$HISTORY"
     CONSECUTIVE_REJECTIONS=$((CONSECUTIVE_REJECTIONS + 1))
+    if optimizer_codex_failure_is_nonretryable "$EVENTS_PATH"; then
+      echo "[optimizer] stopping after non-retryable Codex request failure" >&2
+      break
+    fi
     [[ "$CONSECUTIVE_REJECTIONS" -lt "$STOP_AFTER_REJECTIONS" ]] || break
     continue
   fi
