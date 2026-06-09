@@ -23,6 +23,14 @@ const PRICE_SET_EVENT = parseAbiItem("event PriceSet(uint256 price)");
 const BOUGHT_EVENT = parseAbiItem("event Bought(address indexed who, uint256 mntIn, uint256 tokensOut, uint256 price)");
 const SOLD_EVENT = parseAbiItem("event Sold(address indexed who, uint256 tokensIn, uint256 mntOut, uint256 price)");
 
+interface LogCacheEntry {
+  logs: any[];
+  nextBlock: bigint;
+  inFlight?: Promise<any[]>;
+}
+
+const logCache = new Map<string, LogCacheEntry>();
+
 export interface DecisionLog {
   nonce: string;
   target: string;
@@ -58,14 +66,34 @@ async function getChunkedLogs<TEvent extends typeof DECISION_EVENT | typeof PRIC
   address: `0x${string}`,
   event: TEvent,
 ) {
-  const latest = await client.getBlockNumber();
-  // Scan the full history from the deploy block so the chart shows the entire run.
-  const logs = [];
-  for (let start = fromBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
-    const end = start + LOG_CHUNK_SIZE > latest ? latest : start + LOG_CHUNK_SIZE;
-    logs.push(...(await client.getLogs({ address, event, fromBlock: start, toBlock: end } as any)));
+  const key = `${address.toLowerCase()}:${event.name}`;
+  const existing = logCache.get(key);
+  if (existing?.inFlight) return existing.inFlight;
+
+  const entry = existing ?? { logs: [], nextBlock: fromBlock };
+  const refresh = (async () => {
+    const latest = await client.getBlockNumber();
+    if (latest + 1n < entry.nextBlock) {
+      entry.logs = [];
+      entry.nextBlock = fromBlock;
+    }
+
+    // The first request scans deployment history; later refreshes only read new blocks.
+    for (let start = entry.nextBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
+      const end = start + LOG_CHUNK_SIZE > latest ? latest : start + LOG_CHUNK_SIZE;
+      entry.logs.push(...(await client.getLogs({ address, event, fromBlock: start, toBlock: end } as any)));
+    }
+    entry.nextBlock = latest + 1n;
+    return entry.logs;
+  })();
+
+  entry.inFlight = refresh;
+  logCache.set(key, entry);
+  try {
+    return await refresh;
+  } finally {
+    entry.inFlight = undefined;
   }
-  return logs as any[];
 }
 
 export async function getDecisions(vault?: `0x${string}`): Promise<DecisionLog[]> {

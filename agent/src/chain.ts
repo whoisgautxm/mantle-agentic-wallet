@@ -1,4 +1,4 @@
-import { publicClient, walletClient, aiVaultAddress, dexAddress, mockTokenAddress } from "./config.js";
+import { publicClient, getAgentWalletClient, aiVaultAddress, dexAddress, mockTokenAddress } from "./config.js";
 import { DEX_ABI, ERC20_ABI } from "./dex.js";
 import { assertSimulationSucceeded, simulateExecute, type ExecuteSimulationClient } from "./simulation/simulator.js";
 import type { Decision, VaultState } from "./types.js";
@@ -8,7 +8,7 @@ import type { SimulationResult } from "./simulation/types.js";
 export { VAULT_ABI };
 
 type ExecuteDecision = Extract<Decision, { kind: "execute" }>;
-type AgentWalletClient = typeof walletClient;
+type AgentWalletClient = ReturnType<typeof getAgentWalletClient>;
 
 interface ExecuteReceipt {
   status: "success" | "reverted";
@@ -150,7 +150,7 @@ export async function readVaultState(
 export async function submitExecute(
   vault: `0x${string}`,
   d: ExecuteDecision,
-  client: AgentWalletClient = walletClient,
+  client: AgentWalletClient = getAgentWalletClient(),
   options: SubmitExecuteOptions = {},
 ): Promise<ExecuteResult> {
   const account = options.account ?? ((client as any).account?.address as `0x${string}` | undefined);

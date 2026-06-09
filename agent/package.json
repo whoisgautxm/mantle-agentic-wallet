@@ -3,10 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "start": "tsx src/agent.ts",
+    "start:prod": "node dist/agent.js",
     "keeper": "tsx src/keeper.ts",
+    "keeper:prod": "node dist/keeper.js",
     "baseline": "tsx src/baseline.ts",
+    "baseline:prod": "node dist/baseline.js",
     "demo": "tsx src/demoStart.ts",
     "demo:start": "tsx src/demoStart.ts",
     "demo:status": "tsx src/demoStatus.ts",
@@ -28,6 +32,8 @@
     "eval:synchronized": "tsx src/multiRegimeEval.ts --ai-assisted --summary",
     "eval:synchronized:live": "tsx src/multiRegimeEval.ts --live-assessment --summary",
     "eval:generate-heldout": "tsx src/heldOutMarketFixtures.ts",
+    "eval:strategy-suite": "tsx src/strategyOptimizationEval.ts",
+    "eval:strategy-gate": "tsx src/strategyOptimizationGate.ts",
     "fixture:approved-candidate": "tsx src/approvedCandidateExecutionFixture.ts"
   },
   "dependencies": {

@@ -27,7 +27,7 @@ import {
   type ReasoningProvider,
   type TradeCandidate,
 } from "./brain.js";
-import { chain, aiVaultAddress, dexAddress, agentAccount, mockTokenAddress } from "./config.js";
+import { chain, aiVaultAddress, dexAddress, getAgentAccount, mockTokenAddress } from "./config.js";
 import { computeMarketFeatures } from "./marketFeatures.js";
 import { createOracleRouterFromEnv } from "./oracles/router.js";
 import { gasAdjustedRoiBps, portfolioSnapshot, portfolioValueWei, roiBps } from "./pnl.js";
@@ -54,6 +54,7 @@ function createReasoningClient(): ReasoningClient {
 }
 
 const client = createReasoningClient();
+const agentAccount = getAgentAccount();
 const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, mockTokenAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createOracleRouterFromEnv(readPrice);

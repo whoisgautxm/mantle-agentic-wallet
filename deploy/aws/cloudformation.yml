@@ -1,0 +1,820 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Mantle agent wallet demo on ECS Fargate with ALB, EFS traces, and Secrets Manager.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: mantle-agent-wallet
+    AllowedPattern: "[a-z0-9-]+"
+  Environment:
+    Type: String
+    Default: prod
+    AllowedPattern: "[a-z0-9-]+"
+  WebImageUri:
+    Type: String
+  WorkerImageUri:
+    Type: String
+  AppSecretArn:
+    Type: String
+  OpenAIModel:
+    Type: String
+    Default: gpt-5.2
+  WebDesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 2
+  AgentDesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 1
+  KeeperDesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 1
+  BaselineDesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 1
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-vpc"
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-igw"
+        - Key: Project
+          Value: !Ref AppName
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.42.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-public-a"
+        - Key: Project
+          Value: !Ref AppName
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-public-b"
+        - Key: Project
+          Value: !Ref AppName
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-public"
+        - Key: Project
+          Value: !Ref AppName
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP access to the Mantle dashboard
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-alb"
+        - Key: Project
+          Value: !Ref AppName
+
+  TaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS tasks; only the ALB can reach the web container
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-tasks"
+        - Key: Project
+          Value: !Ref AppName
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: NFS access from ECS tasks
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref TaskSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-efs"
+        - Key: Project
+          Value: !Ref AppName
+
+  TraceFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_7_DAYS
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-traces"
+        - Key: Project
+          Value: !Ref AppName
+
+  TraceAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref TraceFileSystem
+      PosixUser:
+        Uid: "1000"
+        Gid: "1000"
+      RootDirectory:
+        Path: /traces
+        CreationInfo:
+          OwnerUid: "1000"
+          OwnerGid: "1000"
+          Permissions: "0770"
+
+  TraceMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref TraceFileSystem
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  TraceMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref TraceFileSystem
+      SubnetId: !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AppName}-${Environment}"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadMantleAppSecret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref AppSecretArn
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AppName}/${Environment}/web"
+      RetentionInDays: 14
+
+  AgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AppName}/${Environment}/agent"
+      RetentionInDays: 14
+
+  KeeperLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AppName}/${Environment}/keeper"
+      RetentionInDays: 14
+
+  BaselineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AppName}/${Environment}/baseline"
+      RetentionInDays: 14
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AppName}-${Environment}"
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      Type: application
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /api/health
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-399
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  WebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AppName}-${Environment}-web"
+      Cpu: "512"
+      Memory: "1024"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - Name: agent-traces
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref TraceFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref TraceAccessPoint
+              IAM: DISABLED
+            RootDirectory: /
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref WebImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: HOSTNAME
+              Value: 0.0.0.0
+            - Name: CHAIN_REPLAY_SOURCE
+              Value: live
+            - Name: LIVE_STATUS_SOURCE
+              Value: rpc
+            - Name: LOG_CHUNK_SIZE
+              Value: "4999"
+            - Name: TRACE_DIR
+              Value: /app/agent/traces
+            - Name: ORACLE_PROVIDER
+              Value: mockdex
+            - Name: RISK_MAX_DEX_ORACLE_DEVIATION_BPS
+              Value: "300"
+            - Name: RISK_MAX_POSITION_BPS
+              Value: "7000"
+            - Name: RISK_MAX_TRADE_VALUE_BPS
+              Value: "2500"
+            - Name: PORTFOLIO_SPENDERS
+              Value: MerchantMoeLBRouter:0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a:known
+            - Name: MERCHANT_MOE_LIVE_EXECUTION_ENABLED
+              Value: "false"
+          Secrets:
+            - Name: MANTLE_RPC_URL
+              ValueFrom: !Sub "${AppSecretArn}:MANTLE_RPC_URL::"
+            - Name: LOGS_RPC_URL
+              ValueFrom: !Sub "${AppSecretArn}:LOGS_RPC_URL::"
+          MountPoints:
+            - SourceVolume: agent-traces
+              ContainerPath: /app/agent/traces
+              ReadOnly: true
+          LinuxParameters:
+            InitProcessEnabled: true
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 30
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  AgentTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AppName}-${Environment}-agent"
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - Name: agent-traces
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref TraceFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref TraceAccessPoint
+              IAM: DISABLED
+            RootDirectory: /
+      ContainerDefinitions:
+        - Name: agent
+          Image: !Ref WorkerImageUri
+          Command:
+            - node
+            - dist/agent.js
+          Essential: true
+          Environment:
+            - Name: AI_PROVIDER
+              Value: openai
+            - Name: OPENAI_MODEL
+              Value: !Ref OpenAIModel
+            - Name: AGENT_INTERVAL_MS
+              Value: "120000"
+            - Name: AGENT_STRATEGY
+              Value: ensemble
+            - Name: AGENT_STRATEGY_BASELINE_MNT
+              Value: "0.005"
+            - Name: AGENT_ESTIMATED_EXECUTION_COST_BPS
+              Value: "60"
+            - Name: AGENT_PRE_MODEL_COST_GATE
+              Value: "1"
+            - Name: AGENT_PRE_MODEL_GAS_ESTIMATE_UNITS
+              Value: "170000"
+            - Name: AGENT_POST_MODEL_REVALIDATION
+              Value: "1"
+            - Name: AGENT_REVALIDATION_MAX_PRICE_DRIFT_BPS
+              Value: "150"
+            - Name: AGENT_REVALIDATION_MAX_AMOUNT_DRIFT_BPS
+              Value: "250"
+            - Name: AGENT_PRICE_FRESHNESS_BPS
+              Value: "100"
+            - Name: AGENT_CONTEXT
+              Value: Classify the observed regime before acting. Preserve capital in confirmed downtrends, avoid premature selling in sustained rallies, and trade only when expected edge exceeds costs.
+            - Name: AGENT_DYNAMIC_COST_GATE
+              Value: "0"
+            - Name: AGENT_FEE_BPS
+              Value: "0"
+            - Name: EXECUTION_SLIPPAGE_BPS
+              Value: "100"
+            - Name: AGENT_COST_BUFFER_BPS
+              Value: "10"
+            - Name: AGENT_MAX_BLOCK_DRIFT
+              Value: "0"
+            - Name: TRACE_ENABLED
+              Value: "true"
+            - Name: TRACE_DIR
+              Value: /app/agent/traces
+            - Name: ORACLE_PROVIDER
+              Value: mockdex
+            - Name: RISK_MAX_DEX_ORACLE_DEVIATION_BPS
+              Value: "300"
+            - Name: RISK_MAX_POSITION_BPS
+              Value: "7000"
+            - Name: RISK_MAX_TRADE_VALUE_BPS
+              Value: "2500"
+            - Name: PORTFOLIO_SPENDERS
+              Value: MerchantMoeLBRouter:0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a:known
+            - Name: MERCHANT_MOE_LIVE_EXECUTION_ENABLED
+              Value: "false"
+          Secrets:
+            - Name: MANTLE_RPC_URL
+              ValueFrom: !Sub "${AppSecretArn}:MANTLE_RPC_URL::"
+            - Name: AGENT_PRIVATE_KEY
+              ValueFrom: !Sub "${AppSecretArn}:AGENT_PRIVATE_KEY::"
+            - Name: OPENAI_API_KEY
+              ValueFrom: !Sub "${AppSecretArn}:OPENAI_API_KEY::"
+          MountPoints:
+            - SourceVolume: agent-traces
+              ContainerPath: /app/agent/traces
+              ReadOnly: false
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AgentLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: agent
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  KeeperTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AppName}-${Environment}-keeper"
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - Name: agent-traces
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref TraceFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref TraceAccessPoint
+              IAM: DISABLED
+            RootDirectory: /
+      ContainerDefinitions:
+        - Name: keeper
+          Image: !Ref WorkerImageUri
+          Command:
+            - node
+            - dist/keeper.js
+          Essential: true
+          Environment:
+            - Name: KEEPER_INTERVAL_MS
+              Value: "45000"
+            - Name: KEEPER_PRICE_MODE
+              Value: scripted
+            - Name: KEEPER_SEED
+              Value: "20260607"
+            - Name: KEEPER_START_TICK
+              Value: "0"
+            - Name: KEEPER_MAX_STEP_BPS
+              Value: "600"
+            - Name: TRACE_ENABLED
+              Value: "true"
+            - Name: TRACE_DIR
+              Value: /app/agent/traces
+          Secrets:
+            - Name: MANTLE_RPC_URL
+              ValueFrom: !Sub "${AppSecretArn}:MANTLE_RPC_URL::"
+            - Name: OWNER_PRIVATE_KEY
+              ValueFrom: !Sub "${AppSecretArn}:OWNER_PRIVATE_KEY::"
+          MountPoints:
+            - SourceVolume: agent-traces
+              ContainerPath: /app/agent/traces
+              ReadOnly: false
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref KeeperLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: keeper
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  BaselineTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AppName}-${Environment}-baseline"
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - Name: agent-traces
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref TraceFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref TraceAccessPoint
+              IAM: DISABLED
+            RootDirectory: /
+      ContainerDefinitions:
+        - Name: baseline
+          Image: !Ref WorkerImageUri
+          Command:
+            - node
+            - dist/baseline.js
+          Essential: true
+          Environment:
+            - Name: BASELINE_INTERVAL_MS
+              Value: "60000"
+            - Name: TRACE_ENABLED
+              Value: "true"
+            - Name: TRACE_DIR
+              Value: /app/agent/traces
+            - Name: ORACLE_PROVIDER
+              Value: mockdex
+            - Name: RISK_MAX_DEX_ORACLE_DEVIATION_BPS
+              Value: "300"
+            - Name: RISK_MAX_POSITION_BPS
+              Value: "7000"
+            - Name: RISK_MAX_TRADE_VALUE_BPS
+              Value: "2500"
+            - Name: PORTFOLIO_SPENDERS
+              Value: MerchantMoeLBRouter:0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a:known
+            - Name: MERCHANT_MOE_LIVE_EXECUTION_ENABLED
+              Value: "false"
+          Secrets:
+            - Name: MANTLE_RPC_URL
+              ValueFrom: !Sub "${AppSecretArn}:MANTLE_RPC_URL::"
+            - Name: BASELINE_PRIVATE_KEY
+              ValueFrom: !Sub "${AppSecretArn}:BASELINE_PRIVATE_KEY::"
+          MountPoints:
+            - SourceVolume: agent-traces
+              ContainerPath: /app/agent/traces
+              ReadOnly: false
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BaselineLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: baseline
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  WebService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - HttpListener
+      - TraceMountTargetA
+      - TraceMountTargetB
+    Properties:
+      ServiceName: !Sub "${AppName}-${Environment}-web"
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref WebTaskDefinition
+      DesiredCount: !Ref WebDesiredCount
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 120
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 3000
+          TargetGroupArn: !Ref WebTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  AgentService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - TraceMountTargetA
+      - TraceMountTargetB
+    Properties:
+      ServiceName: !Sub "${AppName}-${Environment}-agent"
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref AgentTaskDefinition
+      DesiredCount: !Ref AgentDesiredCount
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  KeeperService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - TraceMountTargetA
+      - TraceMountTargetB
+    Properties:
+      ServiceName: !Sub "${AppName}-${Environment}-keeper"
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref KeeperTaskDefinition
+      DesiredCount: !Ref KeeperDesiredCount
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  BaselineService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - TraceMountTargetA
+      - TraceMountTargetB
+    Properties:
+      ServiceName: !Sub "${AppName}-${Environment}-baseline"
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref BaselineTaskDefinition
+      DesiredCount: !Ref BaselineDesiredCount
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+Outputs:
+  DashboardUrl:
+    Description: Public HTTP URL for the dashboard
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+  ClusterName:
+    Value: !Ref Cluster
+  WebServiceName:
+    Value: !GetAtt WebService.Name
+  AgentServiceName:
+    Value: !GetAtt AgentService.Name
+  KeeperServiceName:
+    Value: !GetAtt KeeperService.Name
+  BaselineServiceName:
+    Value: !GetAtt BaselineService.Name
+  TraceFileSystemId:
+    Value: !Ref TraceFileSystem

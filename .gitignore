@@ -2,6 +2,9 @@
 .env
 .env.local
 *.key
+deploy/aws/secrets.*.json
+!deploy/aws/secrets.example.json
+deploy/aws/.runtime/
 # node
 node_modules/
 .next/
@@ -11,6 +14,7 @@ traces/
 agent/traces/
 agent/evals/generated/
 .runtime/
+optimizer-artifacts/
 # foundry
 contracts/out/
 contracts/cache/

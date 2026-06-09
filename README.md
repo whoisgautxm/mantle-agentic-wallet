@@ -589,6 +589,10 @@ Copy the printed values into `shared/addresses.json`:
 
 ## Running the Live Demo
 
+### AWS Deployment
+
+AWS deployment assets are in `deploy/`. Start with `deploy/aws/README.md` for the ECS/Fargate deployment path and `deploy/docker/docker-compose.aws.yml` for local container smoke testing.
+
 ### One-Command Demo
 
 The safest demo path is the orchestrator. It starts exactly one keeper, one AI runner, one baseline runner, and one dashboard, then cleans them up on `Ctrl-C`.

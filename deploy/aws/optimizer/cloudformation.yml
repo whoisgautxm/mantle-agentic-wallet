@@ -1,0 +1,262 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Isolated CodeBuild strategy optimization loop for the Mantle agent wallet.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: mantle-agent-wallet
+    AllowedPattern: "[a-z0-9-]+"
+  Environment:
+    Type: String
+    Default: prod
+    AllowedPattern: "[a-z0-9-]+"
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/whoisgautxm/mantle-agentic-wallet.git
+  SourceVersion:
+    Type: String
+    Default: master
+    AllowedPattern: "[A-Za-z0-9._/-]+"
+  CodexSecretArn:
+    Type: String
+  CodexModel:
+    Type: String
+    Default: gpt-5.5
+  CodexCliVersion:
+    Type: String
+    Default: 0.137.0
+  MaxIterations:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 10
+  StopAfterRejections:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+  ComputeType:
+    Type: String
+    Default: BUILD_GENERAL1_MEDIUM
+    AllowedValues:
+      - BUILD_GENERAL1_SMALL
+      - BUILD_GENERAL1_MEDIUM
+      - BUILD_GENERAL1_LARGE
+
+Resources:
+  OptimizerArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOptimizerArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: strategy-optimization
+
+  OptimizerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/codebuild/${AppName}-${Environment}-strategy-optimizer"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+  OptimizerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: StrategyOptimizerRuntime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub
+                  - "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:*"
+                  - LogGroupName: !Ref OptimizerLogGroup
+              - Sid: ReadOpenAISecret
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref CodexSecretArn
+              - Sid: WriteArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt OptimizerArtifactBucket.Arn
+              - Sid: WriteArtifactObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${OptimizerArtifactBucket.Arn}/*"
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+  OptimizerProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AppName}-${Environment}-strategy-optimizer"
+      Description: Bounded Codex strategy experiments with deterministic and held-out gates.
+      ServiceRole: !GetAtt OptimizerRole.Arn
+      TimeoutInMinutes: 120
+      QueuedTimeoutInMinutes: 30
+      ConcurrentBuildLimit: 1
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 22
+              commands:
+                - node --version
+                - npm --version
+                - npm install --global "@openai/codex@${CODEX_CLI_VERSION}"
+                - codex --version
+            pre_build:
+              commands:
+                - git clone --depth 1 --branch "$SOURCE_VERSION" "$REPOSITORY_URL" "$CODEBUILD_SRC_DIR/repository"
+                - cd "$CODEBUILD_SRC_DIR/repository/agent"
+                - npm ci --cache "$CODEBUILD_SRC_DIR/.npm-cache"
+                - cd "$CODEBUILD_SRC_DIR/repository"
+                - |
+                  aws secretsmanager get-secret-value \
+                    --secret-id "$CODEX_SECRET_ARN" \
+                    --query SecretString \
+                    --output text |
+                  node -e '
+                    let source = "";
+                    process.stdin.setEncoding("utf8");
+                    process.stdin.on("data", (chunk) => { source += chunk; });
+                    process.stdin.on("end", () => {
+                      const key = JSON.parse(source).CODEX_API_KEY;
+                      if (!key || typeof key !== "string") {
+                        throw new Error("CODEX_API_KEY is missing from the optimizer secret");
+                      }
+                      process.stdout.write(key);
+                    });
+                  ' > /tmp/codex-api-key
+                - chmod 600 /tmp/codex-api-key
+            build:
+              commands:
+                - cd "$CODEBUILD_SRC_DIR/repository"
+                - |
+                  OPTIMIZER_CODEX_KEY_FILE=/tmp/codex-api-key \
+                  OPTIMIZER_MODEL="$OPTIMIZER_MODEL" \
+                  OPTIMIZER_MAX_ITERATIONS="$OPTIMIZER_MAX_ITERATIONS" \
+                  OPTIMIZER_STOP_AFTER_REJECTIONS="$OPTIMIZER_STOP_AFTER_REJECTIONS" \
+                  OPTIMIZER_DRY_RUN="${OPTIMIZER_DRY_RUN:-0}" \
+                  bash deploy/aws/optimizer/run-loop.sh
+            post_build:
+              commands:
+                - rm -f /tmp/codex-api-key
+          artifacts:
+            base-directory: repository
+            files:
+              - optimizer-artifacts/**/*
+      Artifacts:
+        Type: S3
+        Location: !Ref OptimizerArtifactBucket
+        Name: strategy-optimizer
+        NamespaceType: BUILD_ID
+        Packaging: ZIP
+        Path: runs
+        OverrideArtifactName: false
+        EncryptionDisabled: false
+      Cache:
+        Type: NO_CACHE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: !Ref ComputeType
+        Image: aws/codebuild/standard:7.0
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: REPOSITORY_URL
+            Type: PLAINTEXT
+            Value: !Ref RepositoryUrl
+          - Name: SOURCE_VERSION
+            Type: PLAINTEXT
+            Value: !Ref SourceVersion
+          - Name: CODEX_SECRET_ARN
+            Type: PLAINTEXT
+            Value: !Ref CodexSecretArn
+          - Name: OPTIMIZER_MODEL
+            Type: PLAINTEXT
+            Value: !Ref CodexModel
+          - Name: CODEX_CLI_VERSION
+            Type: PLAINTEXT
+            Value: !Ref CodexCliVersion
+          - Name: OPTIMIZER_MAX_ITERATIONS
+            Type: PLAINTEXT
+            Value: !Ref MaxIterations
+          - Name: OPTIMIZER_STOP_AFTER_REJECTIONS
+            Type: PLAINTEXT
+            Value: !Ref StopAfterRejections
+          - Name: OPTIMIZER_DRY_RUN
+            Type: PLAINTEXT
+            Value: "0"
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref OptimizerLogGroup
+          StreamName: optimizer
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: strategy-optimization
+
+Outputs:
+  ProjectName:
+    Value: !Ref OptimizerProject
+  ArtifactBucket:
+    Value: !Ref OptimizerArtifactBucket
+  LogGroup:
+    Value: !Ref OptimizerLogGroup
+  AllowedStrategyPath:
+    Value: agent/src/strategies/ensemble.ts

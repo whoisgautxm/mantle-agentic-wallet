@@ -1,0 +1,63 @@
+name: mantle-agent-wallet
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web
+    env_file:
+      - ../../.env
+    environment:
+      NODE_ENV: production
+      CHAIN_REPLAY_SOURCE: ${CHAIN_REPLAY_SOURCE:-snapshot}
+      LIVE_STATUS_SOURCE: ${LIVE_STATUS_SOURCE:-snapshot}
+      TRACE_DIR: ${TRACE_DIR:-traces}
+    ports:
+      - "${DEMO_DASHBOARD_PORT:-3000}:3000"
+    volumes:
+      - agent-traces:/app/agent/traces:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    command: ["node", "dist/agent.js"]
+    env_file:
+      - ../../.env
+    volumes:
+      - agent-traces:/app/agent/traces
+    restart: unless-stopped
+    profiles: ["workers"]
+
+  keeper:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    command: ["node", "dist/keeper.js"]
+    env_file:
+      - ../../.env
+    volumes:
+      - agent-traces:/app/agent/traces
+    restart: unless-stopped
+    profiles: ["workers"]
+
+  baseline:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    command: ["node", "dist/baseline.js"]
+    env_file:
+      - ../../.env
+    volumes:
+      - agent-traces:/app/agent/traces
+    restart: unless-stopped
+    profiles: ["workers"]
+
+volumes:
+  agent-traces:

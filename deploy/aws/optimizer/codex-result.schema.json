@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["changed", "no-change", "blocked"]
+    },
+    "hypothesis": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "expected_effect": {
+      "type": "string"
+    },
+    "files_changed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "status",
+    "hypothesis",
+    "summary",
+    "expected_effect",
+    "files_changed",
+    "tests_run",
+    "risks"
+  ],
+  "additionalProperties": false
+}
