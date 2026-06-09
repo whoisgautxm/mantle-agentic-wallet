@@ -48,7 +48,8 @@ These are deterministic fixture results, not a promise of future live returns.
   CLI uses its documented isolated-container bypass mode inside this dedicated
   one-shot task.
 - A compact, low-verbosity Codex instruction profile keeps the isolated task
-  within lower API token-per-minute tiers.
+  within lower API token-per-minute tiers. Retained shell output is capped at
+  1,500 tokens so follow-up turns do not grow beyond the same budget.
 - The optimizer task role can read only the Codex-specific secret and write its
   artifact bucket. It receives no wallet key, production application secret, or
   RPC credential.

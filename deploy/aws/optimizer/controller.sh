@@ -20,6 +20,7 @@ build_optimizer_codex_args() {
     -c "model_instructions_file=\"$root/deploy/aws/optimizer/codex-base-instructions.md\""
     -c 'model_reasoning_effort="low"'
     -c 'model_verbosity="low"'
+    -c 'tool_output_token_limit=1500'
     --output-schema "$workspace/deploy/aws/optimizer/codex-result.schema.json"
     --output-last-message "$result_path"
     --json

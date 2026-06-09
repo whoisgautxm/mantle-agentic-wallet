@@ -27,6 +27,10 @@ printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" |
   grep -Fq 'model_reasoning_effort="low"' ||
   fail "Codex must use bounded reasoning effort"
 
+printf '%s\n' "${OPTIMIZER_CODEX_ARGS[@]}" |
+  grep -Fq 'tool_output_token_limit=1500' ||
+  fail "Codex tool output must stay below the low-tier TPM budget"
+
 events="$(mktemp)"
 trap 'rm -f "$events"' EXIT
 cat >"$events" <<'EOF'
