@@ -88,6 +88,10 @@ Real-protocol evidence was also verified on disposable Mantle mainnet forks:
 - The adversarial fork suite passes `5/5`: paused vault, disallowed router, stale oracle, impossible minimum output, and unbounded allowance all stop before unsafe swap submission.
 - Live Mantle mainnet execution remains deliberately disabled. The production-shaped path is proven on a fork without exposing real funds.
 
+### Gas-aware discipline (why the AI sometimes holds)
+
+A dynamic execution-cost gate blocks any trade whose expected edge can't clear realized gas + fees + slippage. On Mantle Sepolia one guarded swap costs ~`0.005 MNT`, so at tiny order sizes gas can be ~1100 bps of notional — larger than the AI's edge — and the AI correctly **refuses to trade at a loss** while a naive DCA keeps buying and bleeds gas. This is visible in the live logs (`expected edge 680 bps <= execution cost 1213 bps (gas 1103 bps)`) and is exactly why the dashboard reports **gas-adjusted** ROI alongside vault-only ROI. With realistic order sizes (where gas is a small fraction of notional) the AI trades on its edge; the gate, not the model, is what holds it back at sub-economic sizes.
+
 ### Multi-Regime Generalization Check
 
 The June 7 cost-aware benchmark ran the real OpenAI decision path with `gpt-5-mini` across four deterministic, no-lookahead market regimes. Every execution deducted 30 bps swap fee, 20 bps slippage, and `0.0002 MNT` gas.

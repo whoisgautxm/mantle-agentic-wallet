@@ -12,7 +12,8 @@ import { loadRiskLimitsFromEnv } from "./risk/limits.js";
 import { simulateExecute } from "./simulation/simulator.js";
 import { createJsonlTraceWriter } from "./tracing.js";
 
-const DCA_MNT = "0.005";
+// Larger DCA so the human baseline trades economically vs gas (tiny 0.005 MNT orders are gas-dominated).
+const DCA_MNT = process.env.BASELINE_DCA_MNT ?? "0.5";
 const protocolRegistry = createProtocolRegistry([createMockDexAdapter(dexAddress, mockTokenAddress, readPrice)]);
 const protocol = protocolRegistry.requireExecutable("mockdex");
 const oracleRouter = createOracleRouterFromEnv(readPrice);

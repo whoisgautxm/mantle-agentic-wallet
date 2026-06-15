@@ -474,7 +474,7 @@ Resources:
             - Name: AGENT_STRATEGY
               Value: ensemble
             - Name: AGENT_STRATEGY_BASELINE_MNT
-              Value: "0.005"
+              Value: "0.5"
             - Name: AGENT_ESTIMATED_EXECUTION_COST_BPS
               Value: "60"
             - Name: AGENT_PRE_MODEL_COST_GATE

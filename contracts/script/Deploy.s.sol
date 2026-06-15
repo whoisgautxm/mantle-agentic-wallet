@@ -13,13 +13,15 @@ contract Deploy is Script {
         address baselineAgent = vm.addr(vm.envUint("BASELINE_PRIVATE_KEY"));
 
         // Demo limits: roomy enough for a long live run (many trades) while still bounded.
-        uint256 perTx = 0.1 ether;
-        uint256 daily = 5 ether;
+        // Sized so a realistic trade dwarfs Mantle gas (~0.005 MNT): tiny demo trades made gas
+        // ~1100 bps of notional, which the cost gate correctly rejected. Larger trades -> gas ~tens of bps.
+        uint256 perTx = 2 ether;
+        uint256 daily = 50 ether;
         uint256 startPrice = 2 ether; // 2 MNT per token
 
         vm.startBroadcast(deployerKey);
         MockDEX dex = new MockDEX(startPrice);
-        (bool okDex,) = address(dex).call{value: 3 ether}(""); // liquidity to pay out sells
+        (bool okDex,) = address(dex).call{value: 20 ether}(""); // liquidity to pay out sells
         require(okDex, "dex seed failed");
 
         // Independent on-chain price reference for guarded-trade floors (kept in sync by the keeper).
@@ -28,14 +30,14 @@ contract Deploy is Script {
         uint256 maxOracleDeviationBps = 500; // declared minOut may sit up to 5% below oracle-fair
 
         AgentVault aiVault = new AgentVault(aiAgent, perTx, daily);
-        (bool okAi,) = address(aiVault).call{value: 1 ether}(""); // equal starting capital
+        (bool okAi,) = address(aiVault).call{value: 10 ether}(""); // equal starting capital
         require(okAi, "ai seed failed");
         aiVault.setAllowedTarget(address(dex), true);
         aiVault.setGuardedTarget(address(dex), true);
         aiVault.setOracle(address(oracle), tradedToken, maxOracleDeviationBps);
 
         AgentVault baselineVault = new AgentVault(baselineAgent, perTx, daily);
-        (bool okBaseline,) = address(baselineVault).call{value: 1 ether}(""); // equal starting capital
+        (bool okBaseline,) = address(baselineVault).call{value: 10 ether}(""); // equal starting capital
         require(okBaseline, "baseline seed failed");
         baselineVault.setAllowedTarget(address(dex), true);
         baselineVault.setGuardedTarget(address(dex), true);
