@@ -20,7 +20,7 @@ All on-chain links are the current guarded + oracle-bound deployment on Mantle S
 
 | Link | URL |
 |---|---|
-| Live dashboard | https://web-chi-sooty-61.vercel.app |
+| Live dashboard (AWS, full loop) | http://mantle-agent-wallet-prod-118676876.ap-south-1.elb.amazonaws.com |
 | MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x1ff284d6eC1E255Fd6Bea7cfAC26412582B25A4B |
 | MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0x5fB4D8EA45bd32D3F6F79d587dB50FD1d6C17D35 |
 | MockOracle on explorer | https://explorer.sepolia.mantle.xyz/address/0x0ECbE10BCc6f0625f24458F17c979520DFb7bEb2 |
