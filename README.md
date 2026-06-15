@@ -16,16 +16,20 @@
 
 ## Live Links
 
+All on-chain links are the current guarded + oracle-bound deployment on Mantle Sepolia (`shared/addresses.json`, deploy block `39635168`).
+
 | Link | URL |
 |---|---|
 | Live dashboard | https://web-chi-sooty-61.vercel.app |
-| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x812C4527fc9cF333208a4090972008a3D5F3d582 |
-| MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0x4c3Ab50fD2e65e3A7137652C375BC5750e24d8c4 |
-| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xd9a13ee193b04AD3Eb61Cf76B7d6Ea1A9950726c |
-| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xD78618596eb75c10CD575B2Edf94305B100E2968 |
-| Guarded execution tx | https://explorer.sepolia.mantle.xyz/tx/0xa85b0591c8796d21e36a6a2dc2b27899c7e7b88841acee0dbfbb488692d0ab27 |
+| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x1ff284d6eC1E255Fd6Bea7cfAC26412582B25A4B |
+| MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0x5fB4D8EA45bd32D3F6F79d587dB50FD1d6C17D35 |
+| MockOracle on explorer | https://explorer.sepolia.mantle.xyz/address/0x0ECbE10BCc6f0625f24458F17c979520DFb7bEb2 |
+| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x31227Df6b26Ed12D966Fe28667c6c6760DAa3EFa |
+| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x345880aDca2F395b208DE6b33aE0c783D418FcD5 |
+| Guarded execution tx | https://explorer.sepolia.mantle.xyz/tx/0xed0d6f4aac15a16c7dfac69be1eb23e873721117308c7fcefafce25e352a8174 |
 | GitHub | https://github.com/whoisgautxm/mantle-agentic-wallet |
 | Submission report | [docs/reports/2026-06-07-submission-readiness-report.md](docs/reports/2026-06-07-submission-readiness-report.md) |
+| Held-out AI-vs-DCA benchmark | [docs/reports/2026-06-07-recovery-and-heldout-eval.md](docs/reports/2026-06-07-recovery-and-heldout-eval.md) |
 | Security model | [SECURITY.md](SECURITY.md) |
 
 ---
