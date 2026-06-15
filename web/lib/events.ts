@@ -10,6 +10,10 @@ const fromBlock = BigInt(addresses.deployBlock ?? 0);
 // accepts 5,000-block windows, while larger ranges are rejected.
 const LOGS_RPC_URL = process.env.LOGS_RPC_URL ?? "https://rpc.sepolia.mantle.xyz";
 const LOG_CHUNK_SIZE = BigInt(process.env.LOG_CHUNK_SIZE ?? "4999");
+// Cold-start live scans only look back this many blocks. The 24/7 keeper/agent loop produces dense
+// recent activity, so scanning the full deployBlock->latest history (hundreds of chunks once the
+// chain is far past deploy) is unnecessary and rate-limits the public RPC. Tune with LOG_LOOKBACK_BLOCKS.
+const LOG_LOOKBACK_BLOCKS = BigInt(process.env.LOG_LOOKBACK_BLOCKS ?? "10000");
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,
@@ -73,12 +77,16 @@ async function getChunkedLogs<TEvent extends typeof DECISION_EVENT | typeof PRIC
   const entry = existing ?? { logs: [], nextBlock: fromBlock };
   const refresh = (async () => {
     const latest = await client.getBlockNumber();
-    if (latest + 1n < entry.nextBlock) {
+    // Bound the cold-start scan to a recent window so a chain far past deploy doesn't trigger
+    // hundreds of getLogs chunks (which rate-limit the public RPC and fail the page render).
+    const lookbackStart = latest > LOG_LOOKBACK_BLOCKS ? latest - LOG_LOOKBACK_BLOCKS : 0n;
+    const windowStart = lookbackStart > fromBlock ? lookbackStart : fromBlock;
+    if (latest + 1n < entry.nextBlock || entry.nextBlock < windowStart) {
       entry.logs = [];
-      entry.nextBlock = fromBlock;
+      entry.nextBlock = windowStart;
     }
 
-    // The first request scans deployment history; later refreshes only read new blocks.
+    // The first request scans the recent window; later refreshes only read new blocks.
     for (let start = entry.nextBlock; start <= latest; start += LOG_CHUNK_SIZE + 1n) {
       const end = start + LOG_CHUNK_SIZE > latest ? latest : start + LOG_CHUNK_SIZE;
       entry.logs.push(...(await client.getLogs({ address, event, fromBlock: start, toBlock: end } as any)));
