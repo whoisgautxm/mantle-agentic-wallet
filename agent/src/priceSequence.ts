@@ -18,12 +18,14 @@ export function mulberry32(seed: number): () => number {
 /// Controlled 40-tick benchmark sequence (report section 15): warm-up -> downtrend -> recovery ->
 /// rally -> range, then flat. Deterministic per tick index — exercises every regime the same way every run.
 export function scriptedReturnBps(tickIndex: number): number {
-  if (tickIndex < 8) return tickIndex % 2 === 0 ? 15 : -15; // flat / warm-up
-  if (tickIndex < 16) return -120; // sustained downtrend
-  if (tickIndex < 22) return 90; // stabilization / recovery
-  if (tickIndex < 32) return 110; // sustained rally
-  if (tickIndex < 40) return tickIndex % 2 === 0 ? 60 : -60; // range
-  return 0; // hold flat after the scripted window
+  // Cycle the 40-tick regime sequence perpetually so an always-on keeper never flatlines into a
+  // dead range tail — judges always see a downtrend->recovery->rally->range cycle in the live window.
+  const t = (((tickIndex % 40) + 40) % 40);
+  if (t < 8) return t % 2 === 0 ? 15 : -15; // flat / warm-up
+  if (t < 16) return -120; // sustained downtrend
+  if (t < 22) return 90; // stabilization / recovery
+  if (t < 32) return 110; // sustained rally
+  return t % 2 === 0 ? 60 : -60; // range (t in [32,40))
 }
 
 /// Seeded random-walk step (bps) — deterministic given (seed, tickIndex), reproducible across runs.

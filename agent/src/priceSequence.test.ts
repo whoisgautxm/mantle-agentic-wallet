@@ -23,7 +23,7 @@ describe("scriptedReturnBps", () => {
     expect(scriptedReturnBps(18)).toBeGreaterThan(0); // recovery
     expect(scriptedReturnBps(26)).toBeGreaterThan(0); // rally
     expect(Math.abs(scriptedReturnBps(36))).toBe(60); // range
-    expect(scriptedReturnBps(50)).toBe(0); // flat after script
+    expect(scriptedReturnBps(50)).toBe(scriptedReturnBps(10)); // sequence cycles (no flat tail), tick 50 == tick 10 downtrend
   });
 });
 
