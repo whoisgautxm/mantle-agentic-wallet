@@ -16,16 +16,16 @@
 
 ## Live Links
 
-All on-chain links are the current guarded + oracle-bound deployment on Mantle Sepolia (`shared/addresses.json`, deploy block `39995876`). The AWS dashboard runs the full agent + keeper + baseline loop 24/7 (cycling-regime market), so it shows a live, continuously-updating Human-vs-AI race.
+All on-chain links are the current guarded + oracle-bound deployment on Mantle Sepolia (`shared/addresses.json`, deploy block `39997523`). The AWS dashboard runs the full agent + keeper + baseline loop 24/7 (cycling-regime market), so it shows a live, continuously-updating Human-vs-AI race.
 
 | Link | URL |
 |---|---|
 | Live dashboard (AWS, full loop) | http://mantle-agent-wallet-prod-118676876.ap-south-1.elb.amazonaws.com |
-| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x58e7aec35E72BBcf866533bFa79d2Ed5BD0fb303 |
-| MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0x29302e85043c66e4b3989eA674bA3f370bD8BF8B |
-| MockOracle on explorer | https://explorer.sepolia.mantle.xyz/address/0xe8b2b8971895F4dEE708827ddB010Fda085D24A7 |
-| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0xb416ec3326680Fd586cbd0E168B1fE9A851ce516 |
-| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x8D96515095f337619CD4d0fec59159D41c12f2e0 |
+| MockDEX on explorer | https://explorer.sepolia.mantle.xyz/address/0x272BdcF13862171078eEF93cEfA0fd26ed2fcce0 |
+| MockToken on explorer | https://explorer.sepolia.mantle.xyz/address/0xdBBb7590cC8cE98CE1276D698bb56045c67D83Bf |
+| MockOracle on explorer | https://explorer.sepolia.mantle.xyz/address/0xe03A48081b3bc6DdC8eF1470bDF484588688d77B |
+| AI vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x5E4598Aa54d2236541aa0Ca2A41985ac1bdD7712 |
+| Baseline vault on explorer | https://explorer.sepolia.mantle.xyz/address/0x4c364598AD54A6C043e5636756a151dF29F73752 |
 | Guarded execution tx | https://explorer.sepolia.mantle.xyz/tx/0x0d32ebf9e6697f6928a68075aeeb50ba1f4ee7de9ad6aedae4666cfe9257944a |
 | GitHub | https://github.com/whoisgautxm/mantle-agentic-wallet |
 | Submission report | [docs/reports/2026-06-07-submission-readiness-report.md](docs/reports/2026-06-07-submission-readiness-report.md) |
